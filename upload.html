@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upload — OCSF Log Mapper</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+
+.upload-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  min-height: calc(100vh - 52px);
+  gap: 0;
+}
+
+/* ── LEFT: UPLOAD + FILE LIST ── */
+.upload-main {
+  border-right: 1px solid var(--border);
+  padding: 2.5rem 2.5rem;
+  overflow-y: auto;
+}
+
+.page-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.8rem;
+  border-bottom: 1px solid var(--border);
+}
+.page-header h1 {
+  font-family: var(--display);
+  font-size: clamp(2rem, 4vw, 3rem);
+  letter-spacing: 0.06em; color: var(--bright); line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.page-header p {
+  font-family: var(--sans); font-size: 0.82rem;
+  font-weight: 300; color: var(--text); line-height: 1.7;
+}
+
+/* ── DROP ZONE ── */
+.dropzone {
+  border: 1px dashed var(--border2);
+  background: var(--surface);
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+  margin-bottom: 2rem;
+}
+.dropzone:hover,
+.dropzone.dragover {
+  border-color: var(--cyan);
+  background: rgba(0,200,224,0.04);
+}
+.dropzone.dragover .dz-icon { transform: scale(1.15); color: var(--cyan); }
+
+.dz-icon {
+  font-size: 2.2rem; margin-bottom: 1rem;
+  display: block; transition: transform 0.2s, color 0.2s;
+  color: var(--dim);
+}
+.dz-title {
+  font-family: var(--display); font-size: 1.3rem;
+  letter-spacing: 0.08em; color: var(--bright);
+  margin-bottom: 0.4rem;
+}
+.dz-sub {
+  font-family: var(--sans); font-size: 0.78rem;
+  font-weight: 300; color: var(--dim); margin-bottom: 1.2rem;
+  line-height: 1.6;
+}
+.dz-formats {
+  display: flex; justify-content: center; gap: 0.4rem; flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.dz-input { display: none; }
+.dz-btn {
+  font-family: var(--mono); font-size: 0.68rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.55rem 1.2rem;
+  border: 1px solid var(--border2); color: var(--text);
+  background: var(--bg); cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.dz-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* upload progress bar */
+.upload-progress {
+  display: none;
+  position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  background: var(--border);
+}
+.upload-progress-fill {
+  height: 100%; width: 0%;
+  background: var(--cyan);
+  transition: width 0.3s ease;
+}
+
+/* ── FILE LIST ── */
+.file-list-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.flist-title {
+  font-family: var(--display); font-size: 1.1rem;
+  letter-spacing: 0.08em; color: var(--bright);
+}
+.flist-count {
+  font-size: 0.65rem; letter-spacing: 0.1em;
+  color: var(--dim); border: 1px solid var(--border);
+  padding: 0.2rem 0.6rem;
+}
+
+.file-list-controls {
+  display: flex; gap: 0.5rem; align-items: center;
+  margin-bottom: 1rem;
+}
+.search-box {
+  flex: 1;
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 0.5rem 0.8rem;
+  font-family: var(--mono); font-size: 0.72rem; color: var(--text);
+  outline: none; transition: border-color 0.2s;
+}
+.search-box::placeholder { color: var(--dim); }
+.search-box:focus { border-color: var(--border2); }
+.sort-select {
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 0.5rem 0.8rem;
+  font-family: var(--mono); font-size: 0.68rem; color: var(--dim);
+  outline: none; cursor: pointer;
+  appearance: none; min-width: 110px;
+}
+
+/* file table */
+.file-table-wrap { overflow-x: auto; }
+.file-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 0.76rem;
+}
+.file-table th {
+  text-align: left; padding: 0.6rem 0.8rem;
+  font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--dim); border-bottom: 1px solid var(--border);
+  font-weight: 400; white-space: nowrap;
+}
+.file-table th input[type="checkbox"] { accent-color: var(--cyan); }
+.file-table td {
+  padding: 0.75rem 0.8rem;
+  border-bottom: 1px solid rgba(21,31,43,0.7);
+  vertical-align: middle;
+}
+.file-table tr:last-child td { border-bottom: none; }
+.file-table tr:hover td { background: rgba(0,200,224,0.02); }
+.file-table tr.selected td { background: rgba(0,200,224,0.04); }
+
+.file-icon { font-size: 1rem; }
+.file-name {
+  font-family: var(--mono); color: var(--bright);
+  font-size: 0.74rem; display: block; margin-bottom: 0.1rem;
+}
+.file-path { font-size: 0.63rem; color: var(--dim); }
+.file-size { color: var(--text); white-space: nowrap; }
+.file-date { color: var(--dim); white-space: nowrap; font-size: 0.68rem; }
+
+.row-actions { display: flex; gap: 0.4rem; }
+.row-btn {
+  font-family: var(--mono); font-size: 0.58rem;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.22rem 0.5rem; border: 1px solid var(--border);
+  color: var(--dim); background: none; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+}
+.row-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.row-btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+.empty-state {
+  text-align: center; padding: 3rem 1rem;
+  border: 1px dashed var(--border);
+  display: none;
+}
+.empty-state.visible { display: block; }
+.empty-state p {
+  font-family: var(--sans); font-size: 0.8rem;
+  color: var(--dim); margin-top: 0.5rem;
+}
+
+/* bulk action bar */
+.bulk-bar {
+  display: none;
+  align-items: center; gap: 0.8rem;
+  padding: 0.7rem 1rem;
+  background: rgba(0,200,224,0.06);
+  border: 1px solid rgba(0,200,224,0.2);
+  margin-bottom: 1rem;
+  font-family: var(--sans); font-size: 0.78rem; color: var(--cyan);
+}
+.bulk-bar.visible { display: flex; }
+.bulk-actions { display: flex; gap: 0.5rem; margin-left: auto; }
+
+/* ── RIGHT: GROUPS PANEL ── */
+.groups-panel {
+  background: var(--surface);
+  padding: 2.5rem 1.8rem;
+  overflow-y: auto;
+}
+.groups-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.groups-title {
+  font-family: var(--display); font-size: 1.1rem;
+  letter-spacing: 0.08em; color: var(--bright);
+}
+
+/* create group form */
+.new-group-form {
+  background: var(--bg); border: 1px solid var(--border);
+  padding: 1.2rem; margin-bottom: 1.5rem;
+}
+.ngf-label {
+  font-size: 0.6rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--dim);
+  margin-bottom: 0.5rem; display: block;
+}
+.ngf-input {
+  width: 100%; background: var(--surface);
+  border: 1px solid var(--border); border-bottom: none;
+  padding: 0.55rem 0.8rem;
+  font-family: var(--mono); font-size: 0.74rem; color: var(--bright);
+  outline: none;
+}
+.ngf-input:focus { border-color: var(--border2); }
+.ngf-source {
+  width: 100%; background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.55rem 0.8rem;
+  font-family: var(--mono); font-size: 0.68rem; color: var(--dim);
+  outline: none; cursor: pointer; appearance: none;
+  margin-bottom: 0.8rem;
+}
+.ngf-hint {
+  font-family: var(--sans); font-size: 0.68rem;
+  color: var(--dim); margin-bottom: 0.8rem; line-height: 1.5;
+}
+.ngf-hint span { color: var(--cyan); }
+
+/* group cards */
+.group-card {
+  background: var(--bg); border: 1px solid var(--border);
+  margin-bottom: 0.8rem;
+  transition: border-color 0.2s;
+}
+.group-card:hover { border-color: var(--border2); }
+.gc-header {
+  padding: 0.9rem 1rem;
+  display: flex; align-items: center; gap: 0.7rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.gc-color {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.gc-name {
+  font-family: var(--sans); font-size: 0.82rem; font-weight: 500;
+  color: var(--bright); flex: 1;
+}
+.gc-count {
+  font-size: 0.62rem; color: var(--dim);
+  border: 1px solid var(--border); padding: 0.15rem 0.5rem;
+}
+.gc-chevron {
+  font-size: 0.6rem; color: var(--dim);
+  transition: transform 0.2s;
+}
+.gc-chevron.open { transform: rotate(90deg); }
+
+.gc-files {
+  display: none; padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+.gc-files.open { display: block; }
+.gc-file-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.4rem 0.2rem;
+  border-bottom: 1px solid rgba(21,31,43,0.5);
+  font-size: 0.68rem;
+}
+.gc-file-item:last-child { border-bottom: none; }
+.gc-file-name { color: var(--text); font-family: var(--mono); }
+.gc-file-remove {
+  color: var(--dim); cursor: pointer; font-size: 0.6rem;
+  padding: 0.1rem 0.3rem;
+  transition: color 0.15s;
+}
+.gc-file-remove:hover { color: var(--red); }
+
+.gc-footer {
+  padding: 0.7rem 1rem;
+  display: flex; gap: 0.5rem; align-items: center;
+}
+.gc-source-tag { font-size: 0.6rem; color: var(--dim); flex: 1; }
+
+.gc-empty {
+  padding: 0.8rem 0.2rem;
+  font-family: var(--sans); font-size: 0.72rem;
+  color: var(--dim); font-style: italic;
+}
+
+/* drop target highlight */
+.group-card.drop-target {
+  border-color: var(--cyan);
+  background: rgba(0,200,224,0.04);
+}
+
+/* no groups state */
+.no-groups {
+  text-align: center; padding: 2rem 1rem;
+  font-family: var(--sans); font-size: 0.78rem; color: var(--dim);
+  border: 1px dashed var(--border); margin-top: 1rem;
+}
+
+/* process button area */
+.process-area {
+  margin-top: 1.5rem; padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.process-area p {
+  font-family: var(--sans); font-size: 0.72rem;
+  font-weight: 300; color: var(--dim); line-height: 1.6;
+  margin-bottom: 1rem;
+}
+.process-btn {
+  width: 100%; padding: 0.8rem;
+  font-family: var(--display); font-size: 1.1rem;
+  letter-spacing: 0.1em; color: var(--bg);
+  background: var(--cyan); border: none;
+  cursor: pointer; transition: all 0.2s;
+}
+.process-btn:hover { background: transparent; color: var(--cyan); border: 1px solid var(--cyan); }
+.process-btn:disabled { background: var(--border); color: var(--dim); cursor: not-allowed; }
+
+/* toast */
+.toast {
+  position: fixed; bottom: 2rem; right: 2rem;
+  background: var(--surface); border: 1px solid var(--border2);
+  padding: 0.8rem 1.2rem;
+  font-family: var(--sans); font-size: 0.78rem; color: var(--bright);
+  display: flex; align-items: center; gap: 0.6rem;
+  transform: translateY(20px); opacity: 0;
+  transition: all 0.3s ease; pointer-events: none;
+  z-index: 9000;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: rgba(61,214,140,0.4); }
+.toast.error   { border-color: rgba(224,82,82,0.4); }
+
+@media (max-width: 1000px) {
+  .upload-layout { grid-template-columns: 1fr; }
+  .groups-panel { border-top: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">OCSF<em>.</em>MAPPER</a>
+    <ul class="nav-links">
+      <li><a href="index.html"><span class="nav-num">01 /</span> Overview</a></li>
+      <li><a href="deploy.html"><span class="nav-num">02 /</span> Deploy</a></li>
+      <li><a href="upload.html" class="active"><span class="nav-num">03 /</span> Upload</a></li>
+      <li><a href="dashboard.html"><span class="nav-num">04 /</span> Dashboard</a></li>
+      <li><a href="control.html"><span class="nav-num">05 /</span> Control</a></li>
+    </ul>
+    <div class="nav-right">
+      <div class="nav-status"><span class="dot"></span>PySpark Ready</div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+<div class="upload-layout">
+
+  <!-- LEFT: UPLOAD + FILES -->
+  <div class="upload-main">
+    <div class="page-header">
+      <div class="section-label">Log Ingestion</div>
+      <h1>UPLOAD LOGS</h1>
+      <p>Drag and drop your raw log files or use the file picker. Once uploaded, assign files to groups — each group maps to a separate dashboard.</p>
+    </div>
+
+    <!-- DROP ZONE -->
+    <div class="dropzone" id="dropzone">
+      <span class="dz-icon">⬆</span>
+      <div class="dz-title">DROP FILES HERE</div>
+      <div class="dz-sub">Drag your JSON log files into this area,<br>or click to open the file picker</div>
+      <div class="dz-formats">
+        <span class="tag tag-cyan">.json</span>
+        <span class="tag tag-dim">.jsonl</span>
+        <span class="tag tag-dim">.log</span>
+        <span class="tag tag-dim">.txt</span>
+      </div>
+      <button class="dz-btn" onclick="document.getElementById('file-input').click()">Browse Files</button>
+      <input type="file" id="file-input" class="dz-input" multiple accept=".json,.jsonl,.log,.txt">
+      <div class="upload-progress" id="upload-progress">
+        <div class="upload-progress-fill" id="upload-progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- BULK BAR -->
+    <div class="bulk-bar" id="bulk-bar">
+      <span id="bulk-count">0 files selected</span>
+      <div class="bulk-actions">
+        <button class="btn btn-ghost btn-sm" onclick="assignSelectedToGroup()">Assign to Group</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelected()">Delete Selected</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearSelection()">✕ Clear</button>
+      </div>
+    </div>
+
+    <!-- FILE LIST -->
+    <div class="file-list-header">
+      <span class="flist-title">UPLOADED FILES</span>
+      <span class="flist-count" id="file-count">0 files</span>
+    </div>
+
+    <div class="file-list-controls">
+      <input type="text" class="search-box" id="search-box" placeholder="Search files..." oninput="filterFiles()">
+      <select class="sort-select" id="sort-select" onchange="sortFiles()">
+        <option value="date-desc">Newest first</option>
+        <option value="date-asc">Oldest first</option>
+        <option value="name-asc">Name A–Z</option>
+        <option value="size-desc">Largest first</option>
+      </select>
+    </div>
+
+    <div class="empty-state visible" id="empty-state">
+      <span style="font-size:1.8rem;">📂</span>
+      <p>No files uploaded yet. Drag files above or use the file picker to get started.</p>
+    </div>
+
+    <div class="file-table-wrap">
+      <table class="file-table" id="file-table" style="display:none;">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"></th>
+            <th>File</th>
+            <th>Size</th>
+            <th>Uploaded</th>
+            <th>Group</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="file-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RIGHT: GROUPS PANEL -->
+  <div class="groups-panel">
+    <div class="groups-header">
+      <span class="groups-title">FILE GROUPS</span>
+      <span class="tag tag-dim" id="group-count-tag">0 groups</span>
+    </div>
+
+    <!-- Create new group -->
+    <div class="new-group-form">
+      <label class="ngf-label">New Group Name</label>
+      <input type="text" class="ngf-input" id="new-group-name" placeholder="e.g. Production CloudTrail" maxlength="40">
+      <select class="ngf-source" id="new-group-source">
+        <option value="aws_cloudtrail">aws_cloudtrail</option>
+        <option value="custom">custom (add later)</option>
+      </select>
+      <div class="ngf-hint">Select files in the table, then <span>assign them to a group</span> — or drag file rows directly onto a group card.</div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="createGroup()">+ Create Group</button>
+    </div>
+
+    <!-- Groups list -->
+    <div id="groups-list">
+      <div class="no-groups" id="no-groups-msg">
+        No groups yet. Create one above, then assign files to it.
+      </div>
+    </div>
+
+    <!-- Process -->
+    <div class="process-area">
+      <p>When your groups are ready, send them to the dashboard for OCSF normalization and visualization.</p>
+      <button class="process-btn" id="process-btn" onclick="goToDashboard()" disabled>
+        PROCESS &amp; VISUALIZE →
+      </button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span id="toast-icon">✓</span>
+  <span id="toast-msg">Done</span>
+</div>
+
+<script>
+// ── STATE ──
+let files = [];
+let groups = [];
+let selectedIds = new Set();
+const GROUP_COLORS = ['#00c8e0','#f5a623','#3dd68c','#e05252','#a78bfa','#fb7185','#34d399','#60a5fa'];
+
+// ── DRAG & DROP ──
+const dropzone = document.getElementById('dropzone');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  handleFiles(Array.from(e.dataTransfer.files));
+});
+dropzone.addEventListener('click', e => {
+  if (e.target.classList.contains('dz-btn')) return;
+  document.getElementById('file-input').click();
+});
+document.getElementById('file-input').addEventListener('change', e => {
+  handleFiles(Array.from(e.target.files));
+  e.target.value = '';
+});
+
+function handleFiles(newFiles) {
+  if (!newFiles.length) return;
+  const prog = document.getElementById('upload-progress');
+  const fill = document.getElementById('upload-progress-fill');
+  prog.style.display = 'block';
+
+  let i = 0;
+  const interval = setInterval(() => {
+    i += Math.random() * 25;
+    fill.style.width = Math.min(i, 95) + '%';
+  }, 80);
+
+  setTimeout(() => {
+    clearInterval(interval);
+    fill.style.width = '100%';
+    setTimeout(() => { prog.style.display = 'none'; fill.style.width = '0%'; }, 400);
+
+    newFiles.forEach(f => {
+      if (files.find(x => x.name === f.name)) return; // deduplicate
+      files.push({
+        id: Date.now() + Math.random(),
+        name: f.name,
+        size: f.size,
+        type: f.type || 'application/json',
+        date: new Date(),
+        group: null,
+        fileObj: f
+      });
+    });
+    renderTable();
+    showToast(`${newFiles.length} file${newFiles.length > 1 ? 's' : ''} uploaded`, 'success');
+  }, 800);
+}
+
+// ── RENDER TABLE ──
+function renderTable() {
+  const tbody = document.getElementById('file-tbody');
+  const table = document.getElementById('file-table');
+  const empty = document.getElementById('empty-state');
+  const countEl = document.getElementById('file-count');
+
+  const query = document.getElementById('search-box').value.toLowerCase();
+  let visible = files.filter(f => f.name.toLowerCase().includes(query));
+
+  const sort = document.getElementById('sort-select').value;
+  visible.sort((a, b) => {
+    if (sort === 'date-desc') return b.date - a.date;
+    if (sort === 'date-asc')  return a.date - b.date;
+    if (sort === 'name-asc')  return a.name.localeCompare(b.name);
+    if (sort === 'size-desc') return b.size - a.size;
+    return 0;
+  });
+
+  countEl.textContent = files.length + ' file' + (files.length !== 1 ? 's' : '');
+
+  if (!files.length) {
+    empty.classList.add('visible');
+    table.style.display = 'none';
+    return;
+  }
+  empty.classList.remove('visible');
+  table.style.display = 'table';
+
+  tbody.innerHTML = visible.map(f => {
+    const grp = groups.find(g => g.id === f.group);
+    const grpBadge = grp
+      ? `<span style="font-size:0.6rem;color:${grp.color};border:1px solid ${grp.color}33;padding:0.15rem 0.4rem;white-space:nowrap;">${grp.name}</span>`
+      : `<span style="font-size:0.6rem;color:var(--dim);">—</span>`;
+    const sel = selectedIds.has(f.id) ? 'selected' : '';
+    return `
+      <tr class="${sel}" draggable="true" data-id="${f.id}"
+          ondragstart="rowDragStart(event, '${f.id}')"
+          onclick="rowClick(event, '${f.id}')">
+        <td><input type="checkbox" ${sel ? 'checked' : ''} onchange="toggleRow('${f.id}', this)" onclick="e => e.stopPropagation()" accent-color="var(--cyan)"></td>
+        <td>
+          <span class="file-icon">${fileIcon(f.name)}</span>
+          <span class="file-name">${f.name}</span>
+          <span class="file-path">${formatDate(f.date)}</span>
+        </td>
+        <td class="file-size">${formatSize(f.size)}</td>
+        <td class="file-date">${timeAgo(f.date)}</td>
+        <td>${grpBadge}</td>
+        <td>
+          <div class="row-actions">
+            <button class="row-btn" onclick="event.stopPropagation(); assignFileToGroupPrompt('${f.id}')">Assign</button>
+            <button class="row-btn danger" onclick="event.stopPropagation(); deleteFile('${f.id}')">✕</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  updateBulkBar();
+  updateProcessBtn();
+}
+
+function fileIcon(name) {
+  if (name.endsWith('.json') || name.endsWith('.jsonl')) return '📄';
+  if (name.endsWith('.log')) return '📋';
+  return '📃';
+}
+function formatSize(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+function formatDate(d) { return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); }
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+// ── SELECTION ──
+function rowClick(e, id) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+  toggleRow(id, null);
+}
+function toggleRow(id, cb) {
+  const fid = typeof id === 'string' ? parseFloat(id) || id : id;
+  const file = files.find(f => String(f.id) === String(id));
+  if (!file) return;
+  if (selectedIds.has(file.id)) selectedIds.delete(file.id);
+  else selectedIds.add(file.id);
+  renderTable();
+}
+function toggleSelectAll(cb) {
+  if (cb.checked) files.forEach(f => selectedIds.add(f.id));
+  else selectedIds.clear();
+  renderTable();
+}
+function clearSelection() { selectedIds.clear(); renderTable(); }
+function updateBulkBar() {
+  const bar = document.getElementById('bulk-bar');
+  const cnt = document.getElementById('bulk-count');
+  if (selectedIds.size > 0) {
+    bar.classList.add('visible');
+    cnt.textContent = selectedIds.size + ' file' + (selectedIds.size > 1 ? 's' : '') + ' selected';
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+
+function deleteSelected() {
+  files = files.filter(f => !selectedIds.has(f.id));
+  selectedIds.clear();
+  renderTable();
+  renderGroups();
+  showToast('Files removed', 'success');
+}
+
+function deleteFile(id) {
+  files = files.filter(f => String(f.id) !== String(id));
+  selectedIds.delete(parseFloat(id));
+  renderTable();
+  renderGroups();
+}
+
+function filterFiles() { renderTable(); }
+function sortFiles()   { renderTable(); }
+
+// ── GROUPS ──
+function createGroup() {
+  const name = document.getElementById('new-group-name').value.trim();
+  const source = document.getElementById('new-group-source').value;
+  if (!name) { showToast('Enter a group name', 'error'); return; }
+  if (groups.find(g => g.name === name)) { showToast('Group name already exists', 'error'); return; }
+
+  groups.push({
+    id: Date.now(),
+    name,
+    source,
+    color: GROUP_COLORS[groups.length % GROUP_COLORS.length],
+    open: true
+  });
+  document.getElementById('new-group-name').value = '';
+  renderGroups();
+  renderTable();
+  updateProcessBtn();
+  showToast(`Group "${name}" created`, 'success');
+}
+
+function renderGroups() {
+  const list = document.getElementById('groups-list');
+  const noMsg = document.getElementById('no-groups-msg');
+  const countTag = document.getElementById('group-count-tag');
+  countTag.textContent = groups.length + ' group' + (groups.length !== 1 ? 's' : '');
+
+  if (!groups.length) {
+    list.innerHTML = '';
+    list.appendChild(noMsg);
+    noMsg.style.display = 'block';
+    return;
+  }
+  noMsg.style.display = 'none';
+
+  list.innerHTML = groups.map(g => {
+    const groupFiles = files.filter(f => f.group === g.id);
+    return `
+      <div class="group-card" id="gc-${g.id}"
+           ondragover="gcDragOver(event, '${g.id}')"
+           ondragleave="gcDragLeave('${g.id}')"
+           ondrop="gcDrop(event, '${g.id}')">
+        <div class="gc-header" onclick="toggleGroup('${g.id}')">
+          <span class="gc-color" style="background:${g.color};box-shadow:0 0 6px ${g.color}44;"></span>
+          <span class="gc-name">${g.name}</span>
+          <span class="gc-count">${groupFiles.length} files</span>
+          <span class="gc-chevron ${g.open ? 'open' : ''}">▶</span>
+        </div>
+        <div class="gc-files ${g.open ? 'open' : ''}">
+          ${groupFiles.length
+            ? groupFiles.map(f => `
+              <div class="gc-file-item">
+                <span class="gc-file-name">${fileIcon(f.name)} ${f.name}</span>
+                <span class="gc-file-remove" onclick="removeFromGroup('${f.id}')">✕</span>
+              </div>`).join('')
+            : `<div class="gc-empty">No files yet — drag rows here or use Assign</div>`
+          }
+        </div>
+        <div class="gc-footer">
+          <span class="gc-source-tag">source: <span style="color:var(--cyan)">${g.source}</span></span>
+          <button class="row-btn" onclick="openGroupDashboard('${g.id}')">Dashboard →</button>
+          <button class="row-btn danger" onclick="deleteGroup('${g.id}')">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleGroup(id) {
+  const g = groups.find(g => String(g.id) === String(id));
+  if (g) { g.open = !g.open; renderGroups(); }
+}
+
+function deleteGroup(id) {
+  const gid = parseFloat(id);
+  files.forEach(f => { if (f.group === gid) f.group = null; });
+  groups = groups.filter(g => String(g.id) !== String(id));
+  renderGroups();
+  renderTable();
+  updateProcessBtn();
+  showToast('Group removed', 'success');
+}
+
+function removeFromGroup(fileId) {
+  const f = files.find(f => String(f.id) === String(fileId));
+  if (f) { f.group = null; renderTable(); renderGroups(); }
+}
+
+function assignSelectedToGroup() {
+  if (!groups.length) { showToast('Create a group first', 'error'); return; }
+  const gName = prompt('Group name to assign to:\n' + groups.map(g => g.name).join(', '));
+  const grp = groups.find(g => g.name === gName);
+  if (!grp) { showToast('Group not found', 'error'); return; }
+  selectedIds.forEach(id => {
+    const f = files.find(f => f.id === id);
+    if (f) f.group = grp.id;
+  });
+  selectedIds.clear();
+  renderTable();
+  renderGroups();
+  showToast(`Assigned to "${grp.name}"`, 'success');
+}
+
+function assignFileToGroupPrompt(fileId) {
+  if (!groups.length) { showToast('Create a group first', 'error'); return; }
+  const gName = prompt('Assign to group:\n' + groups.map(g => g.name).join(', '));
+  const grp = groups.find(g => g.name === gName);
+  if (!grp) return;
+  const f = files.find(f => String(f.id) === String(fileId));
+  if (f) { f.group = grp.id; renderTable(); renderGroups(); showToast(`Assigned to "${grp.name}"`, 'success'); }
+}
+
+// ── DRAG & DROP onto groups ──
+let dragFileId = null;
+function rowDragStart(e, id) {
+  dragFileId = id;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function gcDragOver(e, gid) {
+  e.preventDefault();
+  document.getElementById('gc-' + gid)?.classList.add('drop-target');
+}
+function gcDragLeave(gid) {
+  document.getElementById('gc-' + gid)?.classList.remove('drop-target');
+}
+function gcDrop(e, gid) {
+  e.preventDefault();
+  document.getElementById('gc-' + gid)?.classList.remove('drop-target');
+  if (!dragFileId) return;
+  const grp = groups.find(g => String(g.id) === String(gid));
+  const f = files.find(f => String(f.id) === String(dragFileId));
+  if (grp && f) {
+    f.group = grp.id;
+    renderTable(); renderGroups();
+    showToast(`"${f.name}" added to "${grp.name}"`, 'success');
+  }
+  dragFileId = null;
+}
+
+// ── PROCESS / NAVIGATE ──
+function updateProcessBtn() {
+  const hasGroupedFiles = files.some(f => f.group !== null);
+  document.getElementById('process-btn').disabled = !hasGroupedFiles;
+}
+
+function openGroupDashboard(gid) {
+  const g = groups.find(g => String(g.id) === String(gid));
+  if (g) {
+    localStorage.setItem('ocsf_active_group', JSON.stringify({
+      id: g.id, name: g.name, source: g.source,
+      files: files.filter(f => f.group === g.id).map(f => f.name)
+    }));
+    window.location.href = 'dashboard.html';
+  }
+}
+
+function goToDashboard() {
+  const grouped = groups.filter(g => files.some(f => f.group === g.id));
+  if (!grouped.length) { showToast('Assign files to groups first', 'error'); return; }
+  localStorage.setItem('ocsf_groups', JSON.stringify(
+    grouped.map(g => ({
+      id: g.id, name: g.name, source: g.source, color: g.color,
+      files: files.filter(f => f.group === g.id).map(f => f.name)
+    }))
+  ));
+  window.location.href = 'dashboard.html';
+}
+
+// ── TOAST ──
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  document.getElementById('toast-icon').textContent = type === 'success' ? '✓' : '✕';
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+// Init render
+renderGroups();
+</script>
+</body>
+</html>

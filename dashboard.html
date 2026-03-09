@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — OCSF Log Mapper</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+
+/* ── LAYOUT ── */
+.dash-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: calc(100vh - 52px);
+}
+
+/* ── GROUP SIDEBAR ── */
+.group-sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.8rem 0;
+  position: sticky;
+  top: 52px;
+  height: calc(100vh - 52px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.gs-header {
+  padding: 0 1.4rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.2rem;
+}
+.gs-title {
+  font-family: var(--display);
+  font-size: 0.9rem; letter-spacing: 0.12em;
+  color: var(--bright);
+}
+.gs-sub { font-size: 0.58rem; letter-spacing: 0.1em; color: var(--dim); margin-top: 0.2rem; }
+
+.group-list { list-style: none; flex: 1; }
+.group-item {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.75rem 1.4rem;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  text-decoration: none;
+}
+.group-item:hover { background: var(--cyan-dim); }
+.group-item.active {
+  border-left-color: var(--cyan);
+  background: rgba(0,200,224,0.06);
+}
+.gi-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.gi-info { flex: 1; min-width: 0; }
+.gi-name {
+  font-family: var(--sans); font-size: 0.78rem; font-weight: 500;
+  color: var(--text); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s;
+}
+.group-item.active .gi-name,
+.group-item:hover .gi-name { color: var(--bright); }
+.gi-count { font-size: 0.6rem; color: var(--dim); margin-top: 0.1rem; }
+.gi-status {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+  animation: pulse 2s infinite;
+}
+
+.gs-footer {
+  padding: 1.2rem 1.4rem;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+.gs-add-btn {
+  width: 100%; padding: 0.55rem;
+  font-family: var(--mono); font-size: 0.62rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--dim); background: none;
+  border: 1px dashed var(--border2);
+  cursor: pointer; transition: all 0.2s;
+  text-decoration: none; display: block; text-align: center;
+}
+.gs-add-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* ── DASHBOARD MAIN ── */
+.dash-main { overflow-y: auto; }
+
+/* group topbar */
+.dash-topbar {
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 1.5rem;
+  flex-wrap: wrap;
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 10;
+}
+.dt-group-color {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+.dt-group-name {
+  font-family: var(--display); font-size: 1.4rem;
+  letter-spacing: 0.08em; color: var(--bright);
+}
+.dt-source {
+  font-size: 0.62rem; letter-spacing: 0.1em;
+  color: var(--dim); border: 1px solid var(--border);
+  padding: 0.2rem 0.6rem;
+}
+.dt-files {
+  font-family: var(--sans); font-size: 0.72rem;
+  color: var(--dim);
+}
+.dt-right {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 0.7rem;
+}
+.dt-live {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.62rem; letter-spacing: 0.1em; color: var(--green);
+}
+.dt-live .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 5px var(--green);
+  animation: pulse 2s infinite;
+}
+.time-range {
+  display: flex; gap: 0;
+  border: 1px solid var(--border);
+}
+.tr-btn {
+  padding: 0.3rem 0.6rem; font-family: var(--mono);
+  font-size: 0.6rem; letter-spacing: 0.08em;
+  color: var(--dim); background: none; border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer; transition: all 0.15s;
+}
+.tr-btn:last-child { border-right: none; }
+.tr-btn:hover { color: var(--cyan); background: var(--cyan-dim); }
+.tr-btn.active { color: var(--cyan); background: rgba(0,200,224,0.08); }
+
+/* ── KPI ROW ── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+.kpi-card {
+  padding: 1.5rem 1.8rem;
+  border-right: 1px solid var(--border);
+  transition: background 0.2s;
+  position: relative; overflow: hidden;
+}
+.kpi-card:last-child { border-right: none; }
+.kpi-card:hover { background: rgba(0,200,224,0.02); }
+.kpi-label {
+  font-size: 0.58rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--dim);
+  margin-bottom: 0.6rem;
+}
+.kpi-value {
+  font-family: var(--display); font-size: 2.2rem;
+  letter-spacing: 0.04em; color: var(--bright);
+  line-height: 1; margin-bottom: 0.4rem;
+}
+.kpi-delta {
+  font-size: 0.65rem; display: flex; align-items: center; gap: 0.3rem;
+}
+.kpi-delta.up { color: var(--green); }
+.kpi-delta.down { color: var(--red); }
+.kpi-delta.neutral { color: var(--dim); }
+.kpi-sparkline {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 28px; opacity: 0.4;
+}
+
+/* ── CHART GRID ── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.chart-cell {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 1.5rem 1.8rem;
+}
+.chart-cell:nth-child(2n) { border-right: none; }
+.chart-cell.full-width {
+  grid-column: 1 / -1;
+  border-right: none;
+}
+
+.chart-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; margin-bottom: 1.2rem;
+}
+.chart-title {
+  font-family: var(--display); font-size: 1rem;
+  letter-spacing: 0.08em; color: var(--bright);
+}
+.chart-sub {
+  font-family: var(--sans); font-size: 0.65rem;
+  color: var(--dim); margin-top: 0.15rem;
+}
+.chart-actions { display: flex; gap: 0.4rem; }
+.chart-btn {
+  font-size: 0.58rem; letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem; border: 1px solid var(--border);
+  color: var(--dim); background: none; cursor: pointer;
+  transition: all 0.15s; text-transform: uppercase;
+  font-family: var(--mono);
+}
+.chart-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.chart-btn.active { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+
+/* canvas wrapper */
+.chart-wrap { position: relative; width: 100%; }
+
+/* ── EVENT LOG TABLE ── */
+.event-log { border-top: 1px solid var(--border); }
+.event-log-header {
+  padding: 1.2rem 1.8rem;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.event-log-title {
+  font-family: var(--display); font-size: 1rem;
+  letter-spacing: 0.08em; color: var(--bright);
+}
+.log-filter {
+  display: flex; gap: 0.4rem;
+}
+.lf-btn {
+  font-family: var(--mono); font-size: 0.6rem;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.25rem 0.6rem; border: 1px solid var(--border);
+  color: var(--dim); background: none; cursor: pointer;
+  transition: all 0.15s;
+}
+.lf-btn:hover { border-color: var(--border2); color: var(--text); }
+.lf-btn.active { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+
+.event-table-wrap { overflow-x: auto; }
+.event-table {
+  width: 100%; border-collapse: collapse; font-size: 0.73rem;
+}
+.event-table th {
+  text-align: left; padding: 0.6rem 1rem;
+  font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--dim); border-bottom: 1px solid var(--border); font-weight: 400;
+}
+.event-table td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid rgba(21,31,43,0.6);
+  font-family: var(--mono); font-size: 0.7rem;
+  vertical-align: middle;
+}
+.event-table tr:hover td { background: rgba(0,200,224,0.02); }
+
+.sev-badge {
+  display: inline-block; padding: 0.12rem 0.45rem;
+  font-size: 0.58rem; letter-spacing: 0.08em; border: 1px solid;
+}
+.sev-1 { color: #3dd68c; border-color: rgba(61,214,140,0.3); }
+.sev-2 { color: var(--cyan); border-color: rgba(0,200,224,0.3); }
+.sev-3 { color: var(--amber); border-color: rgba(245,166,35,0.3); }
+.sev-4 { color: var(--red); border-color: rgba(224,82,82,0.3); }
+
+.status-ok  { color: var(--green); }
+.status-err { color: var(--red); }
+
+/* no-group overlay */
+.no-group-overlay {
+  display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  min-height: calc(100vh - 52px);
+  text-align: center; padding: 2rem;
+}
+.no-group-overlay.visible { display: flex; }
+.ngo-icon { font-size: 3rem; margin-bottom: 1.2rem; }
+.ngo-title {
+  font-family: var(--display); font-size: 2rem;
+  letter-spacing: 0.08em; color: var(--bright); margin-bottom: 0.5rem;
+}
+.ngo-sub {
+  font-family: var(--sans); font-size: 0.82rem;
+  color: var(--dim); margin-bottom: 1.5rem; max-width: 340px; line-height: 1.7;
+}
+
+@media (max-width: 1000px) {
+  .dash-layout { grid-template-columns: 1fr; }
+  .group-sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; padding: 1rem; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .chart-grid { grid-template-columns: 1fr; }
+  .chart-cell:nth-child(2n) { border-right: none; }
+}
+@media (max-width: 600px) {
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .dash-topbar { gap: 0.8rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">OCSF<em>.</em>MAPPER</a>
+    <ul class="nav-links">
+      <li><a href="index.html"><span class="nav-num">01 /</span> Overview</a></li>
+      <li><a href="deploy.html"><span class="nav-num">02 /</span> Deploy</a></li>
+      <li><a href="upload.html"><span class="nav-num">03 /</span> Upload</a></li>
+      <li><a href="dashboard.html" class="active"><span class="nav-num">04 /</span> Dashboard</a></li>
+      <li><a href="control.html"><span class="nav-num">05 /</span> Control</a></li>
+    </ul>
+    <div class="nav-right">
+      <div class="nav-status"><span class="dot"></span>Live</div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+
+<!-- NO GROUP STATE -->
+<div class="no-group-overlay" id="no-group-overlay">
+  <div class="ngo-icon">📊</div>
+  <div class="ngo-title">NO GROUPS YET</div>
+  <p class="ngo-sub">Upload log files and assign them to groups first. Each group gets its own dashboard here.</p>
+  <a href="upload.html" class="btn btn-primary">→ Go to Upload</a>
+</div>
+
+<div class="dash-layout" id="dash-layout" style="display:none;">
+
+  <!-- GROUP SIDEBAR -->
+  <aside class="group-sidebar">
+    <div class="gs-header">
+      <div class="gs-title">GROUPS</div>
+      <div class="gs-sub">Select to view dashboard</div>
+    </div>
+    <ul class="group-list" id="group-list"></ul>
+    <div class="gs-footer">
+      <a href="upload.html" class="gs-add-btn">+ Add Group</a>
+    </div>
+  </aside>
+
+  <!-- DASHBOARD CONTENT -->
+  <div class="dash-main" id="dash-main">
+
+    <!-- TOP BAR -->
+    <div class="dash-topbar">
+      <span class="dt-group-color" id="dt-color"></span>
+      <span class="dt-group-name" id="dt-name">—</span>
+      <span class="dt-source tag tag-dim" id="dt-source">—</span>
+      <span class="dt-files" id="dt-files">—</span>
+      <div class="dt-right">
+        <div class="dt-live"><span class="dot"></span>Live</div>
+        <div class="time-range">
+          <button class="tr-btn" onclick="setRange(this,'1h')">1H</button>
+          <button class="tr-btn active" onclick="setRange(this,'24h')">24H</button>
+          <button class="tr-btn" onclick="setRange(this,'7d')">7D</button>
+          <button class="tr-btn" onclick="setRange(this,'30d')">30D</button>
+        </div>
+        <a href="control.html" class="btn btn-ghost btn-sm">Control Panel →</a>
+      </div>
+    </div>
+
+    <!-- KPI ROW -->
+    <div class="kpi-row" id="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Events</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-delta up" id="kpi-total-delta">—</div>
+        <svg class="kpi-sparkline" id="spark-total" viewBox="0 0 120 28" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Normalized</div>
+        <div class="kpi-value" id="kpi-norm">—</div>
+        <div class="kpi-delta up" id="kpi-norm-delta">—</div>
+        <svg class="kpi-sparkline" id="spark-norm" viewBox="0 0 120 28" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Errors / Failures</div>
+        <div class="kpi-value" id="kpi-err">—</div>
+        <div class="kpi-delta down" id="kpi-err-delta">—</div>
+        <svg class="kpi-sparkline" id="spark-err" viewBox="0 0 120 28" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Unique Source IPs</div>
+        <div class="kpi-value" id="kpi-ip">—</div>
+        <div class="kpi-delta neutral" id="kpi-ip-delta">—</div>
+        <svg class="kpi-sparkline" id="spark-ip" viewBox="0 0 120 28" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="chart-grid">
+
+      <!-- Chart 1: Event Volume Over Time (full width) -->
+      <div class="chart-cell full-width">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">EVENT VOLUME OVER TIME</div>
+            <div class="chart-sub">Normalized events per hour · all OCSF classes</div>
+          </div>
+          <div class="chart-actions">
+            <button class="chart-btn active" onclick="toggleChartType(this,'vol-line')">Line</button>
+            <button class="chart-btn" onclick="toggleChartType(this,'vol-bar')">Bar</button>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:180px;">
+          <canvas id="chart-volume"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: OCSF Class Breakdown -->
+      <div class="chart-cell">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">OCSF CLASS BREAKDOWN</div>
+            <div class="chart-sub">Event distribution by schema class</div>
+          </div>
+          <div class="chart-actions">
+            <button class="chart-btn active" onclick="toggleChartType(this,'cls-donut')">Donut</button>
+            <button class="chart-btn" onclick="toggleChartType(this,'cls-bar')">Bar</button>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:220px; display:flex; gap:1.5rem; align-items:center;">
+          <canvas id="chart-classes" style="max-width:200px; max-height:200px;"></canvas>
+          <div id="class-legend" style="flex:1; font-size:0.72rem;"></div>
+        </div>
+      </div>
+
+      <!-- Chart 3: Severity Distribution -->
+      <div class="chart-cell">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">SEVERITY DISTRIBUTION</div>
+            <div class="chart-sub">Events by severity_id level</div>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:220px;">
+          <canvas id="chart-severity"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 4: Top Source IPs -->
+      <div class="chart-cell full-width">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">TOP SOURCE IP ACTIVITY</div>
+            <div class="chart-sub">Most active src_endpoint.ip addresses</div>
+          </div>
+        </div>
+        <div id="ip-bars" style="margin-top:0.5rem;"></div>
+      </div>
+
+    </div>
+
+    <!-- EVENT LOG -->
+    <div class="event-log">
+      <div class="event-log-header">
+        <div>
+          <div class="event-log-title">RECENT EVENTS</div>
+          <div style="font-family:var(--sans);font-size:0.65rem;color:var(--dim);margin-top:0.15rem;">Latest normalized OCSF events from this group</div>
+        </div>
+        <div class="log-filter" id="log-filter">
+          <button class="lf-btn active" onclick="filterLog(this,'all')">All</button>
+          <button class="lf-btn" onclick="filterLog(this,'Authentication')">Auth</button>
+          <button class="lf-btn" onclick="filterLog(this,'Account Change')">Account</button>
+          <button class="lf-btn" onclick="filterLog(this,'API Activity')">API</button>
+        </div>
+      </div>
+      <div class="event-table-wrap">
+        <table class="event-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>OCSF Class</th>
+              <th>Activity</th>
+              <th>Actor</th>
+              <th>Source IP</th>
+              <th>Status</th>
+              <th>Severity</th>
+            </tr>
+          </thead>
+          <tbody id="event-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- .dash-main -->
+</div><!-- .dash-layout -->
+</div><!-- .page -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+// ── MOCK DATA GENERATOR ──
+const OCSF_CLASSES = [
+  { name: 'Authentication', uid: 3002, color: '#00c8e0' },
+  { name: 'Account Change', uid: 3001, color: '#f5a623' },
+  { name: 'API Activity',   uid: 6003, color: '#3dd68c' },
+];
+const ACTIVITIES  = { 'Authentication': ['Logon','Logoff','MFA'], 'Account Change': ['Create User','Delete User','Update Policy'], 'API Activity': ['GetObject','ListBuckets','PutObject','DescribeInstances'] };
+const IPS = ['203.0.113.50','198.51.100.22','192.0.2.14','10.0.1.45','172.16.0.88','203.0.113.101','198.51.100.77','10.10.5.2'];
+const USERS = ['alice','bob','carlos','diana','eve','frank','grace','henry'];
+const SEV_LABELS = ['','Informational','Low','Medium','High','Critical'];
+const SEV_COLORS = ['','#3dd68c','#00c8e0','#f5a623','#e05252','#a855f7'];
+
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function generateEvents(n = 40) {
+  return Array.from({ length: n }, (_, i) => {
+    const cls = pick(OCSF_CLASSES);
+    const sev = rand(1, 3);
+    return {
+      ts: new Date(Date.now() - i * rand(30000, 300000)),
+      class: cls.name,
+      uid: cls.uid,
+      activity: pick(ACTIVITIES[cls.name]),
+      actor: pick(USERS),
+      ip: pick(IPS),
+      status: Math.random() > 0.15 ? 'Success' : 'Failure',
+      severity: sev
+    };
+  });
+}
+
+function generateVolume(hours = 24) {
+  return Array.from({ length: hours }, (_, i) => ({
+    label: `${String(i).padStart(2,'0')}:00`,
+    value: rand(8, 280)
+  }));
+}
+
+// ── DEFAULT DEMO GROUPS ──
+const DEFAULT_GROUPS = [
+  { id: 1, name: 'Production CloudTrail', source: 'aws_cloudtrail', color: '#00c8e0', files: ['prod_logs.json','prod_iam.json'] },
+  { id: 2, name: 'Staging Environment',   source: 'aws_cloudtrail', color: '#f5a623', files: ['staging_trail.json'] },
+  { id: 3, name: 'Security Audit',        source: 'aws_cloudtrail', color: '#3dd68c', files: ['audit_jan.json','audit_feb.json','audit_mar.json'] },
+];
+
+let groups = [];
+let activeGroup = null;
+let allEvents = [];
+let activeFilter = 'all';
+let charts = {};
+
+// ── INIT ──
+function init() {
+  // Try loading from localStorage (from upload page), fall back to demo data
+  try {
+    const stored = localStorage.getItem('ocsf_groups');
+    groups = stored ? JSON.parse(stored) : DEFAULT_GROUPS;
+    if (!groups.length) groups = DEFAULT_GROUPS;
+  } catch(e) { groups = DEFAULT_GROUPS; }
+
+  if (!groups.length) {
+    document.getElementById('no-group-overlay').classList.add('visible');
+    return;
+  }
+
+  document.getElementById('dash-layout').style.display = 'grid';
+  renderGroupSidebar();
+  switchGroup(groups[0]);
+}
+
+// ── SIDEBAR ──
+function renderGroupSidebar() {
+  const list = document.getElementById('group-list');
+  list.innerHTML = groups.map(g => `
+    <li>
+      <a class="group-item ${activeGroup && activeGroup.id === g.id ? 'active' : ''}"
+         onclick="switchGroup(${JSON.stringify(g).replace(/"/g,'&quot;')})" href="#">
+        <span class="gi-dot" style="background:${g.color};box-shadow:0 0 5px ${g.color}55;"></span>
+        <div class="gi-info">
+          <div class="gi-name">${g.name}</div>
+          <div class="gi-count">${(g.files||[]).length} file${(g.files||[]).length !== 1 ? 's' : ''}</div>
+        </div>
+        <span class="gi-status"></span>
+      </a>
+    </li>`).join('');
+}
+
+// ── SWITCH GROUP ──
+function switchGroup(g) {
+  activeGroup = g;
+  allEvents = generateEvents(rand(30, 60));
+  renderGroupSidebar();
+  renderTopbar();
+  renderKPIs();
+  renderCharts();
+  renderEventLog();
+}
+
+function renderTopbar() {
+  document.getElementById('dt-color').style.background = activeGroup.color;
+  document.getElementById('dt-color').style.boxShadow = `0 0 6px ${activeGroup.color}77`;
+  document.getElementById('dt-name').textContent = activeGroup.name;
+  document.getElementById('dt-source').textContent = activeGroup.source;
+  document.getElementById('dt-files').textContent = `${(activeGroup.files||[]).length} file${(activeGroup.files||[]).length !== 1 ? 's' : ''}`;
+}
+
+// ── KPIs ──
+function renderKPIs() {
+  const total = allEvents.length;
+  const norm  = Math.floor(total * (0.92 + Math.random() * 0.07));
+  const err   = allEvents.filter(e => e.status === 'Failure').length;
+  const ips   = new Set(allEvents.map(e => e.ip)).size;
+
+  animateNum('kpi-total', total);
+  animateNum('kpi-norm',  norm);
+  animateNum('kpi-err',   err);
+  animateNum('kpi-ip',    ips);
+
+  document.getElementById('kpi-total-delta').textContent = `↑ ${rand(3,18)}% vs last period`;
+  document.getElementById('kpi-norm-delta').textContent  = `↑ ${(norm/total*100).toFixed(1)}% normalization rate`;
+  document.getElementById('kpi-err-delta').textContent   = `↓ ${rand(1,12)}% vs last period`;
+  document.getElementById('kpi-ip-delta').textContent    = `${rand(2,8)} new IPs this period`;
+
+  drawSparkline('spark-total', Array.from({length:12},()=>rand(10,80)), '#00c8e0');
+  drawSparkline('spark-norm',  Array.from({length:12},()=>rand(10,75)), '#3dd68c');
+  drawSparkline('spark-err',   Array.from({length:12},()=>rand(0,12)),  '#e05252');
+  drawSparkline('spark-ip',    Array.from({length:12},()=>rand(4,20)),  '#f5a623');
+}
+
+function animateNum(id, target) {
+  const el = document.getElementById(id);
+  const start = 0; const dur = 700;
+  const t0 = performance.now();
+  function step(now) {
+    const p = Math.min((now - t0) / dur, 1);
+    el.textContent = Math.floor(p * target).toLocaleString();
+    if (p < 1) requestAnimationFrame(step);
+    else el.textContent = target.toLocaleString();
+  }
+  requestAnimationFrame(step);
+}
+
+function drawSparkline(id, data, color) {
+  const svg = document.getElementById(id);
+  const w = 120, h = 28;
+  const max = Math.max(...data, 1);
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - (v / max) * (h - 4) - 2;
+    return `${x},${y}`;
+  }).join(' ');
+  svg.innerHTML = `
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.8"/>
+    <polygon points="0,${h} ${pts} ${w},${h}" fill="url(#grad-${id})" opacity="0.15"/>
+    <defs>
+      <linearGradient id="grad-${id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>`;
+}
+
+// ── CHARTS ──
+Chart.defaults.color = '#3a5060';
+Chart.defaults.borderColor = '#151f2b';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 10;
+
+function renderCharts() {
+  renderVolumeChart();
+  renderClassChart();
+  renderSeverityChart();
+  renderIPBars();
+}
+
+function renderVolumeChart() {
+  const vol = generateVolume(24);
+  const ctx = document.getElementById('chart-volume').getContext('2d');
+  if (charts.volume) charts.volume.destroy();
+  charts.volume = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: vol.map(v => v.label),
+      datasets: [{
+        data: vol.map(v => v.value),
+        borderColor: activeGroup.color,
+        backgroundColor: activeGroup.color + '14',
+        borderWidth: 1.5,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: activeGroup.color,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#090e14', borderColor: '#1e2e40', borderWidth: 1,
+        titleColor: '#ddeeff', bodyColor: '#8aa4b8',
+        callbacks: { label: ctx => `  ${ctx.parsed.y} events` }
+      }},
+      scales: {
+        x: { grid: { color: '#151f2b' }, ticks: { maxTicksLimit: 8 } },
+        y: { grid: { color: '#151f2b' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderClassChart() {
+  const counts = OCSF_CLASSES.map(c => allEvents.filter(e => e.class === c.name).length);
+  const ctx = document.getElementById('chart-classes').getContext('2d');
+  if (charts.classes) charts.classes.destroy();
+  charts.classes = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: OCSF_CLASSES.map(c => c.name),
+      datasets: [{
+        data: counts,
+        backgroundColor: OCSF_CLASSES.map(c => c.color + 'cc'),
+        borderColor: OCSF_CLASSES.map(c => c.color),
+        borderWidth: 1,
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#090e14', borderColor: '#1e2e40', borderWidth: 1,
+          titleColor: '#ddeeff', bodyColor: '#8aa4b8',
+        }
+      }
+    }
+  });
+
+  // Custom legend
+  const total = counts.reduce((a,b) => a+b, 0);
+  document.getElementById('class-legend').innerHTML = OCSF_CLASSES.map((c, i) => `
+    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.7rem;padding:0.5rem 0.6rem;border:1px solid var(--border);">
+      <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0;box-shadow:0 0 5px ${c.color}55;"></span>
+      <span style="flex:1;font-family:var(--sans);font-size:0.72rem;color:var(--text);">${c.name}</span>
+      <span style="font-size:0.68rem;color:var(--cyan);">${counts[i]}</span>
+      <span style="font-size:0.6rem;color:var(--dim);">${total ? Math.round(counts[i]/total*100) : 0}%</span>
+    </div>`).join('');
+}
+
+function renderSeverityChart() {
+  const sevCounts = [1,2,3,4].map(s => allEvents.filter(e => e.severity === s).length);
+  const ctx = document.getElementById('chart-severity').getContext('2d');
+  if (charts.severity) charts.severity.destroy();
+  charts.severity = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Informational','Low','Medium','High'],
+      datasets: [{
+        data: sevCounts,
+        backgroundColor: ['#3dd68c22','#00c8e022','#f5a62322','#e0525222'],
+        borderColor:      ['#3dd68c',  '#00c8e0',  '#f5a623',  '#e05252'],
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#090e14', borderColor: '#1e2e40', borderWidth: 1,
+        titleColor: '#ddeeff', bodyColor: '#8aa4b8',
+      }},
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: '#151f2b' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderIPBars() {
+  const ipMap = {};
+  allEvents.forEach(e => { ipMap[e.ip] = (ipMap[e.ip] || 0) + 1; });
+  const sorted = Object.entries(ipMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+  const max = sorted[0]?.[1] || 1;
+
+  document.getElementById('ip-bars').innerHTML = sorted.map(([ip, count]) => `
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.6rem;">
+      <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text);width:120px;flex-shrink:0;">${ip}</span>
+      <div style="flex:1;height:18px;background:var(--surface);border:1px solid var(--border);position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;left:0;height:100%;width:${(count/max*100).toFixed(1)}%;
+          background:linear-gradient(90deg,${activeGroup.color}44,${activeGroup.color}22);
+          border-right:1px solid ${activeGroup.color}88;
+          transition:width 0.6s ease;"></div>
+      </div>
+      <span style="font-family:var(--display);font-size:0.95rem;color:${activeGroup.color};letter-spacing:0.04em;width:36px;text-align:right;">${count}</span>
+    </div>`).join('');
+}
+
+// ── EVENT LOG ──
+function renderEventLog() {
+  const filtered = activeFilter === 'all'
+    ? allEvents
+    : allEvents.filter(e => e.class === activeFilter);
+
+  document.getElementById('event-tbody').innerHTML = filtered.slice(0, 20).map(e => `
+    <tr>
+      <td style="color:var(--dim);white-space:nowrap;">${e.ts.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
+      <td>
+        <span style="font-size:0.65rem;padding:0.1rem 0.4rem;border:1px solid;
+          color:${OCSF_CLASSES.find(c=>c.name===e.class)?.color};
+          border-color:${OCSF_CLASSES.find(c=>c.name===e.class)?.color}44;">
+          ${e.class}
+        </span>
+      </td>
+      <td style="color:var(--text);">${e.activity}</td>
+      <td style="color:var(--bright);">${e.actor}</td>
+      <td style="color:var(--dim);">${e.ip}</td>
+      <td class="${e.status === 'Success' ? 'status-ok' : 'status-err'}">${e.status}</td>
+      <td><span class="sev-badge sev-${e.severity}">${SEV_LABELS[e.severity]}</span></td>
+    </tr>`).join('');
+}
+
+function filterLog(btn, cls) {
+  activeFilter = cls;
+  document.querySelectorAll('.lf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderEventLog();
+}
+
+// ── CONTROLS ──
+function setRange(btn, range) {
+  document.querySelectorAll('.tr-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  allEvents = generateEvents(rand(20, 60));
+  renderKPIs();
+  renderCharts();
+  renderEventLog();
+}
+
+function toggleChartType(btn, type) {
+  const parent = btn.closest('.chart-cell');
+  parent.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (type === 'vol-bar') {
+    charts.volume.config.type = 'bar';
+    charts.volume.data.datasets[0].fill = false;
+    charts.volume.update();
+  } else if (type === 'vol-line') {
+    charts.volume.config.type = 'line';
+    charts.volume.data.datasets[0].fill = true;
+    charts.volume.update();
+  }
+}
+
+// ── LIVE TICK (refresh event table every 8s) ──
+setInterval(() => {
+  if (!activeGroup) return;
+  const newEvent = generateEvents(1)[0];
+  newEvent.ts = new Date();
+  allEvents.unshift(newEvent);
+  if (allEvents.length > 100) allEvents.pop();
+  renderEventLog();
+  // flash KPI total
+  const el = document.getElementById('kpi-total');
+  el.textContent = allEvents.length.toLocaleString();
+}, 8000);
+
+init();
+</script>
+</body>
+</html>

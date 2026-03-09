@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCSF Log Mapper</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+
+/* ── HERO ── */
+.hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: calc(100vh - 52px);
+}
+.hero-left {
+  padding: 6rem 3rem 4rem;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; justify-content: center;
+}
+.hero-right {
+  padding: 6rem 3rem 4rem;
+  background: var(--surface);
+  display: flex; flex-direction: column; justify-content: center;
+}
+
+.eyebrow {
+  display: flex; align-items: center; gap: 0.7rem;
+  margin-bottom: 2rem;
+  animation: fadeUp 0.5s ease both;
+}
+.eyebrow-line { width: 24px; height: 1px; background: var(--cyan); }
+.eyebrow-text { font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+
+.hero-title {
+  font-family: var(--display);
+  font-size: clamp(3.5rem, 6vw, 6rem);
+  line-height: 0.95; letter-spacing: 0.04em;
+  color: var(--bright); margin-bottom: 1.8rem;
+  animation: fadeUp 0.5s 0.1s ease both;
+}
+.hero-title .outline {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(0,200,224,0.35);
+  display: block;
+}
+.hero-title .accent { color: var(--cyan); display: block; }
+
+.hero-desc {
+  font-family: var(--sans); font-size: 0.875rem;
+  font-weight: 300; line-height: 1.9;
+  color: var(--text); max-width: 400px; margin-bottom: 2.5rem;
+  animation: fadeUp 0.5s 0.2s ease both;
+}
+.hero-ctas {
+  display: flex; gap: 0.8rem; flex-wrap: wrap;
+  animation: fadeUp 0.5s 0.3s ease both;
+}
+
+/* pill badges */
+.hero-badges {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  margin-bottom: 2.5rem;
+  animation: fadeUp 0.5s 0.25s ease both;
+}
+.badge {
+  font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--border2); color: var(--dim);
+}
+
+/* terminal on right */
+.terminal {
+  border: 1px solid var(--border2); background: var(--bg);
+  animation: fadeUp 0.5s 0.35s ease both;
+}
+.term-bar {
+  padding: 0.55rem 1rem; border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex; align-items: center; gap: 0.45rem;
+}
+.term-dot { width: 8px; height: 8px; border-radius: 50%; }
+.term-dot:nth-child(1) { background: #e05252; }
+.term-dot:nth-child(2) { background: #f5a623; }
+.term-dot:nth-child(3) { background: #3dd68c; }
+.term-file { margin-left: auto; font-size: 0.6rem; color: var(--dim); }
+.term-body { padding: 1.2rem 1.4rem; font-size: 0.74rem; line-height: 1.95; }
+.t-p  { color: var(--dim); }
+.t-c  { color: var(--bright); }
+.t-k  { color: var(--amber); }
+.t-v  { color: var(--cyan); }
+.t-s  { color: #7ec87e; }
+.t-n  { color: var(--amber); }
+.t-cm { color: var(--dim); font-style: italic; }
+.t-ok { color: var(--green); }
+.t-sp { display: block; height: 0.5rem; }
+.cursor {
+  display: inline-block; width: 7px; height: 0.85em;
+  background: var(--cyan); vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ── DATA FLOW ── */
+.flow-section {
+  border-top: 1px solid var(--border);
+  padding: 5rem 0;
+  background: var(--surface);
+}
+.flow-inner {
+  max-width: 1100px; margin: 0 auto; padding: 0 2.5rem;
+}
+.flow-title {
+  font-family: var(--display);
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  letter-spacing: 0.06em; color: var(--bright);
+  margin-bottom: 0.5rem;
+}
+.flow-sub {
+  font-family: var(--sans); font-size: 0.82rem; font-weight: 300;
+  color: var(--text); margin-bottom: 3.5rem; max-width: 500px; line-height: 1.8;
+}
+
+.flow-track {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr) ;
+  gap: 0;
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+/* connector line */
+.flow-track::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 5%;
+  width: 90%; height: 1px;
+  background: linear-gradient(90deg,
+    transparent,
+    var(--border2) 10%,
+    var(--border2) 90%,
+    transparent
+  );
+  z-index: 0;
+}
+
+.flow-node {
+  padding: 2rem 1.2rem;
+  border-right: 1px solid var(--border);
+  text-align: center;
+  position: relative; z-index: 1;
+  transition: background 0.25s;
+  background: var(--surface);
+  cursor: default;
+}
+.flow-node:last-child { border-right: none; }
+.flow-node:hover { background: rgba(0,200,224,0.04); }
+.flow-node:hover .fn-icon { border-color: var(--cyan); color: var(--cyan); }
+
+.fn-num {
+  font-family: var(--display); font-size: 0.8rem;
+  letter-spacing: 0.1em; color: var(--dim);
+  margin-bottom: 0.8rem;
+}
+.fn-icon {
+  width: 44px; height: 44px; margin: 0 auto 1rem;
+  border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: var(--text);
+  transition: border-color 0.2s, color 0.2s;
+  background: var(--bg);
+}
+.fn-label {
+  font-family: var(--sans); font-size: 0.78rem; font-weight: 500;
+  color: var(--bright); margin-bottom: 0.4rem;
+}
+.fn-desc {
+  font-family: var(--sans); font-size: 0.68rem; font-weight: 300;
+  color: var(--dim); line-height: 1.6;
+}
+
+/* arrow between nodes */
+.flow-arrow {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; color: var(--dim);
+  padding: 2rem 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* ── WHAT IT MAPS ── */
+.sources-section {
+  border-top: 1px solid var(--border);
+  padding: 5rem 0;
+}
+.sources-inner {
+  max-width: 1100px; margin: 0 auto; padding: 0 2.5rem;
+}
+.sources-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px; background: var(--border);
+  border: 1px solid var(--border);
+  margin-top: 2.5rem;
+}
+.source-card {
+  background: var(--surface);
+  padding: 2rem;
+  transition: background 0.2s;
+}
+.source-card:hover { background: var(--surface2); }
+.sc-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
+.sc-source {
+  font-family: var(--sans); font-size: 0.9rem; font-weight: 500;
+  color: var(--bright);
+}
+.sc-classes {
+  display: flex; flex-direction: column; gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+.sc-class {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 0.72rem;
+}
+.sc-class-name { color: var(--text); }
+.sc-class-uid  { color: var(--cyan); font-size: 0.65rem; letter-spacing: 0.08em; }
+
+/* ── PROJECT STRUCTURE ── */
+.struct-section {
+  border-top: 1px solid var(--border);
+  padding: 5rem 0;
+  background: var(--surface);
+}
+.struct-inner {
+  max-width: 1100px; margin: 0 auto; padding: 0 2.5rem;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: start;
+}
+.tree {
+  border: 1px solid var(--border2);
+  background: var(--bg);
+}
+.tree-header {
+  padding: 0.6rem 1rem; border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.tree-dot { width: 7px; height: 7px; border-radius: 50%; }
+.tree-dot:nth-child(1){background:#e05252;}
+.tree-dot:nth-child(2){background:#f5a623;}
+.tree-dot:nth-child(3){background:#3dd68c;}
+.tree-filename { margin-left: auto; font-size: 0.6rem; color: var(--dim); }
+.tree-body { padding: 1rem 1.2rem; font-size: 0.73rem; line-height: 2; }
+.tr-dir  { color: var(--cyan); }
+.tr-file { color: var(--text); }
+.tr-note { color: var(--dim); font-style: italic; }
+.tr-i    { color: var(--dim); }
+
+.struct-right h3 {
+  font-family: var(--display); font-size: 2rem;
+  letter-spacing: 0.06em; color: var(--bright); margin-bottom: 1rem;
+}
+.struct-right p {
+  font-family: var(--sans); font-size: 0.82rem; font-weight: 300;
+  color: var(--text); line-height: 1.85; margin-bottom: 1.5rem;
+}
+.struct-links { display: flex; flex-direction: column; gap: 0.6rem; }
+.struct-link {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--border);
+  font-family: var(--sans); font-size: 0.8rem;
+  color: var(--text); text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+.struct-link:hover { border-color: var(--cyan); color: var(--cyan); }
+.struct-link span { font-size: 0.65rem; color: var(--dim); }
+.struct-link:hover span { color: var(--cyan); }
+
+/* ── FOOTER ── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 1.5rem 2rem;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 1rem;
+  max-width: 100%;
+}
+.footer-brand {
+  font-family: var(--display); font-size: 1rem;
+  letter-spacing: 0.1em; color: var(--bright);
+}
+.footer-brand em { color: var(--cyan); font-style: normal; }
+.footer-meta {
+  font-size: 0.62rem; letter-spacing: 0.08em; color: var(--dim);
+}
+.footer-badges { display: flex; gap: 0.6rem; }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; min-height: auto; }
+  .hero-left { padding-top: 4rem; }
+  .hero-right { border-top: 1px solid var(--border); }
+  .flow-track { grid-template-columns: 1fr 1fr; }
+  .sources-grid { grid-template-columns: 1fr; }
+  .struct-inner { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">OCSF<em>.</em>MAPPER</a>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active"><span class="nav-num">01 /</span> Overview</a></li>
+      <li><a href="deploy.html"><span class="nav-num">02 /</span> Deploy</a></li>
+      <li><a href="upload.html"><span class="nav-num">03 /</span> Upload</a></li>
+      <li><a href="dashboard.html"><span class="nav-num">04 /</span> Dashboard</a></li>
+      <li><a href="control.html"><span class="nav-num">05 /</span> Control</a></li>
+    </ul>
+    <div class="nav-right">
+      <div class="nav-status"><span class="dot"></span>PySpark Ready</div>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="page">
+<section class="hero">
+  <div class="hero-left">
+    <div class="eyebrow">
+      <span class="eyebrow-line"></span>
+      <span class="eyebrow-text">Open Cybersecurity Schema Framework</span>
+    </div>
+
+    <h1 class="hero-title">
+      RAW
+      <span class="outline">LOGS</span>
+      <span class="accent">UNIFIED</span>
+    </h1>
+
+    <p class="hero-desc">
+      A PySpark-based engine that maps raw security log events into
+      OCSF-normalized format using declarative YAML mapping files —
+      auto-detects source, routes to the correct schema class, zero glue code.
+    </p>
+
+    <div class="hero-badges">
+      <span class="badge">Python 3.9+</span>
+      <span class="badge">PySpark</span>
+      <span class="badge">OCSF v1.1</span>
+      <span class="badge">AWS CloudTrail</span>
+      <span class="badge">MIT License</span>
+    </div>
+
+    <div class="hero-ctas">
+      <a href="deploy.html" class="btn btn-primary">→ Deploy Now</a>
+      <a href="upload.html" class="btn btn-ghost">Upload Logs</a>
+      <a href="https://github.com" target="_blank" class="btn btn-ghost">GitHub ↗</a>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div class="terminal">
+      <div class="term-bar">
+        <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
+        <span class="term-file">output/ocsf_event.yaml</span>
+      </div>
+      <div class="term-body">
+        <div><span class="t-p">$&nbsp;</span><span class="t-c">python main.py --source aws_cloudtrail</span></div>
+        <div><span class="t-cm"># Detected: signin.amazonaws.com_ConsoleLogin</span></div>
+        <div><span class="t-cm"># Routing  → Authentication (class_uid: 3002)</span></div>
+        <span class="t-sp"></span>
+        <div><span class="t-k">class_name</span><span>:    </span><span class="t-v">Authentication</span></div>
+        <div><span class="t-k">class_uid</span><span>:     </span><span class="t-n">3002</span></div>
+        <div><span class="t-k">activity_name</span><span>: </span><span class="t-s">Logon</span></div>
+        <span class="t-sp"></span>
+        <div><span class="t-k">actor</span><span>:</span></div>
+        <div><span>&nbsp;&nbsp;</span><span class="t-k">user</span><span>:</span></div>
+        <div><span>&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="t-k">name</span><span>: </span><span class="t-s">alice</span></div>
+        <div><span>&nbsp;&nbsp;&nbsp;&nbsp;</span><span class="t-k">uid</span><span>:  </span><span class="t-s">AIDA12345</span></div>
+        <span class="t-sp"></span>
+        <div><span class="t-k">src_endpoint</span><span>:</span></div>
+        <div><span>&nbsp;&nbsp;</span><span class="t-k">ip</span><span>: </span><span class="t-s">203.0.113.50</span></div>
+        <span class="t-sp"></span>
+        <div><span class="t-k">status</span><span>:       </span><span class="t-ok">Success</span></div>
+        <div><span class="t-k">severity_id</span><span>:  </span><span class="t-n">1</span></div>
+        <span class="t-sp"></span>
+        <div><span class="t-ok">✓ 1 event normalized</span><span class="cursor"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DATA FLOW -->
+<section class="flow-section">
+  <div class="flow-inner reveal">
+    <div class="section-label">Data Pipeline</div>
+    <h2 class="flow-title">HOW IT WORKS</h2>
+    <p class="flow-sub">Each raw event passes through a 5-stage pipeline. The engine handles detection and routing automatically — your only job is the YAML.</p>
+
+    <div class="flow-track">
+      <div class="flow-node">
+        <div class="fn-num">01</div>
+        <div class="fn-icon">📄</div>
+        <div class="fn-label">Raw JSON Logs</div>
+        <div class="fn-desc">JSONL input from any supported security source</div>
+      </div>
+      <div class="flow-node">
+        <div class="fn-num">02</div>
+        <div class="fn-icon">🔍</div>
+        <div class="fn-label">Auto-Detect</div>
+        <div class="fn-desc">Matches required fields to identify log source</div>
+      </div>
+      <div class="flow-node">
+        <div class="fn-num">03</div>
+        <div class="fn-icon">📋</div>
+        <div class="fn-label">Load YAML Rules</div>
+        <div class="fn-desc">Reads mapping file for the detected source</div>
+      </div>
+      <div class="flow-node">
+        <div class="fn-num">04</div>
+        <div class="fn-icon">⚡</div>
+        <div class="fn-label">Route + Resolve</div>
+        <div class="fn-desc">Templates, enums, wildcards resolved per event</div>
+      </div>
+      <div class="flow-node">
+        <div class="fn-num">05</div>
+        <div class="fn-icon">✅</div>
+        <div class="fn-label">OCSF Output</div>
+        <div class="fn-desc">Normalized JSON + YAML ready for your pipeline</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT IT MAPS -->
+<section class="sources-section">
+  <div class="sources-inner reveal">
+    <div class="section-label">Supported Sources</div>
+    <h2 style="font-family:var(--display);font-size:clamp(2rem,3.5vw,3rem);letter-spacing:0.06em;color:var(--bright);margin-bottom:0.5rem;">CURRENTLY MAPPED</h2>
+    <p style="font-family:var(--sans);font-size:0.82rem;font-weight:300;color:var(--text);margin-bottom:0;max-width:480px;line-height:1.8;">
+      One source today, extensible to any source — add a YAML file, no code changes needed.
+    </p>
+
+    <div class="sources-grid">
+      <div class="source-card">
+        <div class="sc-header">
+          <div>
+            <div class="sc-source">AWS CloudTrail</div>
+            <div style="font-family:var(--sans);font-size:0.72rem;color:var(--dim);margin-top:0.2rem;">IAM, authentication & API activity logs</div>
+          </div>
+          <span class="tag tag-green">Active</span>
+        </div>
+        <div class="sc-classes">
+          <div class="sc-class"><span class="sc-class-name">Authentication</span><span class="sc-class-uid">UID 3002</span></div>
+          <div class="sc-class"><span class="sc-class-name">Account Change</span><span class="sc-class-uid">UID 3001</span></div>
+          <div class="sc-class"><span class="sc-class-name">API Activity</span><span class="sc-class-uid">UID 6003</span></div>
+        </div>
+      </div>
+      <div class="source-card">
+        <div class="sc-header">
+          <div>
+            <div class="sc-source">Add Your Source</div>
+            <div style="font-family:var(--sans);font-size:0.72rem;color:var(--dim);margin-top:0.2rem;">Azure AD, GCP Audit, Okta, and more</div>
+          </div>
+          <span class="tag tag-dim">Extensible</span>
+        </div>
+        <div style="margin-top:0.8rem;padding:1.2rem;border:1px dashed var(--border2);background:var(--bg);">
+          <div style="font-family:var(--sans);font-size:0.78rem;font-weight:300;color:var(--dim);line-height:1.8;">
+            Create <code style="color:var(--cyan);font-size:0.72rem">config/mappings/your_source.yml</code>,
+            define <code style="color:var(--amber);font-size:0.72rem">detection.required_fields</code>
+            and routes — the engine handles the rest.
+          </div>
+          <div style="margin-top:1rem;">
+            <a href="deploy.html" class="btn btn-ghost btn-sm">View Setup Guide →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROJECT STRUCTURE -->
+<section class="struct-section">
+  <div class="struct-inner reveal">
+    <div class="tree">
+      <div class="tree-header">
+        <span class="tree-dot"></span><span class="tree-dot"></span><span class="tree-dot"></span>
+        <span class="tree-filename">ocsf-log-mapper/</span>
+      </div>
+      <div class="tree-body">
+        <div><span class="tr-i">├── </span><span class="tr-file">main.py</span><span class="tr-note">  # PySpark entry point</span></div>
+        <div><span class="tr-i">├── </span><span class="tr-dir">engine/</span></div>
+        <div><span class="tr-i">│   ├── </span><span class="tr-file">loader.py</span><span class="tr-note">  # YAML loader + detection</span></div>
+        <div><span class="tr-i">│   ├── </span><span class="tr-file">resolver.py</span><span class="tr-note">  # Template + enum resolver</span></div>
+        <div><span class="tr-i">│   └── </span><span class="tr-file">mapper.py</span><span class="tr-note">  # Route matching + builder</span></div>
+        <div><span class="tr-i">├── </span><span class="tr-dir">config/mappings/</span></div>
+        <div><span class="tr-i">│   └── </span><span class="tr-file">aws_cloudtrail.yml</span><span class="tr-note">  # Mapping rules</span></div>
+        <div><span class="tr-i">├── </span><span class="tr-dir">sample_logs/</span></div>
+        <div><span class="tr-i">│   └── </span><span class="tr-file">raw_logs.json</span><span class="tr-note">  # Sample CloudTrail events</span></div>
+        <div><span class="tr-i">└── </span><span class="tr-dir">output/</span><span class="tr-note">  # Generated output (git-ignored)</span></div>
+      </div>
+    </div>
+
+    <div class="struct-right">
+      <div class="section-label" style="margin-bottom:1rem;">Navigate the App</div>
+      <h3>EXPLORE<br>THE TOOL</h3>
+      <p>Use the pages in this app to deploy the engine, upload your log files, group them into sources, and monitor normalized output through live dashboards.</p>
+
+      <div class="struct-links">
+        <a href="deploy.html" class="struct-link">
+          <span style="color:var(--bright);">02 / Deployment Guide</span>
+          <span>Setup steps from README →</span>
+        </a>
+        <a href="upload.html" class="struct-link">
+          <span style="color:var(--bright);">03 / Upload Logs</span>
+          <span>Drag-drop + file groups →</span>
+        </a>
+        <a href="dashboard.html" class="struct-link">
+          <span style="color:var(--bright);">04 / Group Dashboard</span>
+          <span>Per-group OCSF visualizations →</span>
+        </a>
+        <a href="control.html" class="struct-link">
+          <span style="color:var(--bright);">05 / Central Control</span>
+          <span>Monitor all running dashboards →</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-brand">OCSF<em>.</em>MAPPER</div>
+  <div class="footer-meta">PySpark · OCSF v1.1 · AWS CloudTrail · MIT License</div>
+  <div class="footer-badges">
+    <span class="tag tag-green">v1.0</span>
+    <span class="tag tag-cyan">Open Source</span>
+  </div>
+</footer>
+
+</div><!-- .page -->
+
+<script>
+  const io = new IntersectionObserver(entries => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('on'), i * 60);
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>

@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control — OCSF Log Mapper</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+
+/* ── OVERALL LAYOUT ── */
+.control-page { padding-top: 52px; }
+
+/* ── COMMAND BAR (below nav) ── */
+.command-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  height: 48px;
+  display: flex; align-items: center; gap: 1.5rem;
+}
+.cb-label {
+  font-size: 0.58rem; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--dim);
+}
+.cb-actions { display: flex; gap: 0.4rem; }
+.cb-btn {
+  font-family: var(--mono); font-size: 0.6rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.3rem 0.8rem; border: 1px solid var(--border);
+  color: var(--dim); background: none; cursor: pointer;
+  transition: all 0.15s; display: flex; align-items: center; gap: 0.4rem;
+}
+.cb-btn:hover       { border-color: var(--cyan); color: var(--cyan); }
+.cb-btn.danger:hover{ border-color: var(--red);  color: var(--red); }
+.cb-btn.success     { border-color: rgba(61,214,140,0.4); color: var(--green); }
+.cb-divider         { width: 1px; height: 20px; background: var(--border); }
+.cb-right           { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+.cb-system-time     { font-size: 0.65rem; color: var(--dim); letter-spacing: 0.06em; }
+.cb-uptime          { font-size: 0.6rem; color: var(--green); letter-spacing: 0.08em; }
+
+/* ── MAIN GRID ── */
+.control-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: auto 1fr;
+  min-height: calc(100vh - 52px - 48px);
+  gap: 0;
+}
+
+/* ── SYSTEM OVERVIEW ROW ── */
+.system-overview {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+.sys-metric {
+  padding: 1.2rem 1.8rem;
+  border-right: 1px solid var(--border);
+  position: relative; overflow: hidden;
+  transition: background 0.2s;
+}
+.sys-metric:last-child { border-right: none; }
+.sys-metric:hover { background: rgba(0,200,224,0.02); }
+.sm-label {
+  font-size: 0.58rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--dim);
+  margin-bottom: 0.5rem;
+}
+.sm-value {
+  font-family: var(--display); font-size: 1.9rem;
+  letter-spacing: 0.04em; color: var(--bright); line-height: 1;
+  margin-bottom: 0.3rem;
+}
+.sm-sub {
+  font-size: 0.62rem; color: var(--dim);
+}
+.sm-sub .up     { color: var(--green); }
+.sm-sub .down   { color: var(--red); }
+.sm-sub .warn   { color: var(--amber); }
+.sm-bar {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  background: var(--border);
+}
+.sm-bar-fill {
+  height: 100%; transition: width 1s ease;
+}
+
+/* ── DASHBOARD CARDS AREA ── */
+.dashboards-area {
+  padding: 2rem;
+  overflow-y: auto;
+}
+.da-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.da-title {
+  font-family: var(--display); font-size: 1.2rem;
+  letter-spacing: 0.1em; color: var(--bright);
+}
+.da-view-toggle {
+  display: flex; border: 1px solid var(--border);
+}
+.view-btn {
+  padding: 0.3rem 0.7rem; font-size: 0.65rem;
+  color: var(--dim); background: none; border: none;
+  border-right: 1px solid var(--border); cursor: pointer;
+  transition: all 0.15s; font-family: var(--mono);
+}
+.view-btn:last-child { border-right: none; }
+.view-btn.active { color: var(--cyan); background: var(--cyan-dim); }
+
+/* ── DASHBOARD CARD (grid view) ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.dash-card {
+  background: var(--surface);
+  padding: 1.5rem;
+  position: relative; overflow: hidden;
+  transition: background 0.2s;
+  cursor: default;
+}
+.dash-card:hover { background: var(--surface2); }
+
+/* status bar top */
+.dc-statusbar {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+
+.dc-header {
+  display: flex; align-items: flex-start; gap: 0.8rem;
+  margin-bottom: 1.2rem;
+}
+.dc-color-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0; margin-top: 3px;
+}
+.dc-info { flex: 1; min-width: 0; }
+.dc-name {
+  font-family: var(--sans); font-size: 0.88rem; font-weight: 600;
+  color: var(--bright); line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dc-source {
+  font-size: 0.6rem; letter-spacing: 0.1em;
+  color: var(--dim); margin-top: 0.2rem;
+}
+.dc-status-badge {
+  padding: 0.18rem 0.5rem; font-size: 0.58rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  border: 1px solid; flex-shrink: 0;
+}
+.status-running { color: var(--green);  border-color: rgba(61,214,140,0.35); background: rgba(61,214,140,0.06); }
+.status-paused  { color: var(--amber);  border-color: rgba(245,166,35,0.35);  background: rgba(245,166,35,0.06); }
+.status-stopped { color: var(--dim);    border-color: var(--border2);         background: transparent; }
+.status-error   { color: var(--red);    border-color: rgba(224,82,82,0.35);   background: rgba(224,82,82,0.06); }
+
+/* mini metrics inside card */
+.dc-metrics {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 0; border: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+.dc-metric {
+  padding: 0.5rem 0.6rem;
+  border-right: 1px solid var(--border);
+  text-align: center;
+}
+.dc-metric:last-child { border-right: none; }
+.dcm-val {
+  font-family: var(--display); font-size: 1.1rem;
+  letter-spacing: 0.04em; line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.dcm-label {
+  font-size: 0.55rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--dim);
+}
+
+/* mini sparkline per card */
+.dc-sparkline {
+  height: 32px; margin-bottom: 1rem;
+  background: var(--bg); border: 1px solid var(--border);
+  position: relative; overflow: hidden;
+}
+.dc-sparkline svg { width: 100%; height: 100%; }
+
+/* files list in card */
+.dc-files {
+  font-size: 0.63rem; color: var(--dim);
+  margin-bottom: 1rem; line-height: 1.7;
+}
+.dc-files span { color: var(--text); }
+
+/* card actions */
+.dc-actions {
+  display: flex; gap: 0.4rem; flex-wrap: wrap;
+}
+.dc-btn {
+  font-family: var(--mono); font-size: 0.6rem;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.3rem 0.7rem; border: 1px solid var(--border);
+  color: var(--dim); background: none; cursor: pointer;
+  transition: all 0.15s; flex: 1; text-align: center;
+  text-decoration: none; display: inline-block;
+}
+.dc-btn:hover               { border-color: var(--cyan); color: var(--cyan); }
+.dc-btn.pause:hover         { border-color: var(--amber); color: var(--amber); }
+.dc-btn.stop:hover          { border-color: var(--red); color: var(--red); }
+.dc-btn.resume              { border-color: rgba(61,214,140,0.4); color: var(--green); }
+.dc-btn.resume:hover        { background: rgba(61,214,140,0.08); }
+
+/* ── LIST VIEW ── */
+.cards-list { display: none; border: 1px solid var(--border); }
+.list-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 80px 80px 80px 80px 120px;
+  padding: 0.55rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.lh-col {
+  font-size: 0.58rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--dim); font-weight: 400;
+}
+.list-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 80px 80px 80px 80px 120px;
+  padding: 0.75rem 1.2rem;
+  border-bottom: 1px solid rgba(21,31,43,0.6);
+  align-items: center; transition: background 0.15s;
+}
+.list-row:last-child { border-bottom: none; }
+.list-row:hover { background: rgba(0,200,224,0.02); }
+.lr-name { display: flex; align-items: center; gap: 0.7rem; }
+.lr-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.lr-name-text {
+  font-family: var(--sans); font-size: 0.8rem; font-weight: 500;
+  color: var(--bright);
+}
+.lr-source  { font-size: 0.68rem; color: var(--dim); }
+.lr-num     { font-family: var(--display); font-size: 1rem; letter-spacing: 0.04em; }
+.lr-actions { display: flex; gap: 0.3rem; }
+.lr-btn {
+  font-family: var(--mono); font-size: 0.55rem;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 0.2rem 0.45rem; border: 1px solid var(--border);
+  color: var(--dim); background: none; cursor: pointer;
+  transition: all 0.15s;
+}
+.lr-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* ── RIGHT PANEL: ACTIVITY LOG ── */
+.activity-panel {
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.ap-header {
+  padding: 1.2rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.ap-title {
+  font-family: var(--display); font-size: 0.9rem;
+  letter-spacing: 0.1em; color: var(--bright);
+}
+.ap-clear {
+  font-size: 0.58rem; letter-spacing: 0.1em; color: var(--dim);
+  background: none; border: 1px solid var(--border); cursor: pointer;
+  padding: 0.2rem 0.5rem; font-family: var(--mono);
+  transition: all 0.15s; text-transform: uppercase;
+}
+.ap-clear:hover { border-color: var(--red); color: var(--red); }
+
+.activity-feed {
+  flex: 1; overflow-y: auto; padding: 0.8rem 0;
+}
+.activity-entry {
+  padding: 0.65rem 1.4rem;
+  border-bottom: 1px solid rgba(21,31,43,0.5);
+  animation: fadeUp 0.3s ease both;
+}
+.ae-time {
+  font-size: 0.58rem; color: var(--dim);
+  letter-spacing: 0.06em; margin-bottom: 0.2rem;
+}
+.ae-msg {
+  font-family: var(--sans); font-size: 0.74rem;
+  color: var(--text); line-height: 1.5;
+}
+.ae-msg .ae-group { font-weight: 500; }
+.ae-tag {
+  display: inline-block; font-size: 0.55rem;
+  padding: 0.1rem 0.35rem; border: 1px solid;
+  margin-left: 0.3rem; vertical-align: middle;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.ae-info    { border-color: rgba(0,200,224,0.3); color: var(--cyan); }
+.ae-success { border-color: rgba(61,214,140,0.3); color: var(--green); }
+.ae-warn    { border-color: rgba(245,166,35,0.3); color: var(--amber); }
+.ae-error   { border-color: rgba(224,82,82,0.3); color: var(--red); }
+
+/* ── SYSTEM HEALTH PANEL (bottom of right col) ── */
+.health-panel {
+  border-top: 1px solid var(--border);
+  padding: 1.2rem 1.4rem;
+  flex-shrink: 0;
+}
+.hp-title {
+  font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 0.8rem;
+}
+.health-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.hr-label {
+  font-family: var(--sans); font-size: 0.7rem; color: var(--text);
+  flex: 1;
+}
+.hr-bar {
+  width: 80px; height: 4px; background: var(--border);
+  position: relative; flex-shrink: 0;
+}
+.hr-fill {
+  position: absolute; top: 0; left: 0; height: 100%;
+  transition: width 1s ease;
+}
+.hr-pct {
+  font-size: 0.62rem; color: var(--dim); width: 28px;
+  text-align: right; flex-shrink: 0;
+}
+
+/* ── EMPTY STATE ── */
+.empty-control {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 4rem 2rem; text-align: center;
+}
+.ec-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+.ec-title {
+  font-family: var(--display); font-size: 1.8rem;
+  letter-spacing: 0.08em; color: var(--bright); margin-bottom: 0.5rem;
+}
+.ec-sub {
+  font-family: var(--sans); font-size: 0.8rem;
+  color: var(--dim); max-width: 340px; line-height: 1.7; margin-bottom: 1.5rem;
+}
+
+@media (max-width: 1100px) {
+  .control-grid { grid-template-columns: 1fr; }
+  .activity-panel { border-left: none; border-top: 1px solid var(--border); max-height: 400px; }
+  .system-overview { grid-template-columns: repeat(3, 1fr); }
+  .sys-metric:nth-child(3) { border-right: none; }
+  .sys-metric:nth-child(4), .sys-metric:nth-child(5) { border-top: 1px solid var(--border); }
+}
+@media (max-width: 700px) {
+  .system-overview { grid-template-columns: 1fr 1fr; }
+  .cards-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">OCSF<em>.</em>MAPPER</a>
+    <ul class="nav-links">
+      <li><a href="index.html"><span class="nav-num">01 /</span> Overview</a></li>
+      <li><a href="deploy.html"><span class="nav-num">02 /</span> Deploy</a></li>
+      <li><a href="upload.html"><span class="nav-num">03 /</span> Upload</a></li>
+      <li><a href="dashboard.html"><span class="nav-num">04 /</span> Dashboard</a></li>
+      <li><a href="control.html" class="active"><span class="nav-num">05 /</span> Control</a></li>
+    </ul>
+    <div class="nav-right">
+      <div class="nav-status"><span class="dot"></span><span id="nav-running-count">0</span> Running</div>
+    </div>
+  </div>
+</nav>
+
+<div class="control-page">
+
+  <!-- COMMAND BAR -->
+  <div class="command-bar">
+    <span class="cb-label">Control Panel</span>
+    <div class="cb-divider"></div>
+    <div class="cb-actions">
+      <button class="cb-btn success" onclick="startAll()">▶ Start All</button>
+      <button class="cb-btn" onclick="pauseAll()">⏸ Pause All</button>
+      <button class="cb-btn danger" onclick="stopAll()">■ Stop All</button>
+    </div>
+    <div class="cb-divider"></div>
+    <div class="cb-actions">
+      <button class="cb-btn" onclick="refreshAll()">↺ Refresh All</button>
+      <button class="cb-btn" onclick="exportReport()">↓ Export Report</button>
+    </div>
+    <div class="cb-right">
+      <span class="cb-uptime" id="cb-uptime">Uptime: 00:00:00</span>
+      <span class="cb-system-time" id="cb-time">—</span>
+    </div>
+  </div>
+
+  <!-- SYSTEM OVERVIEW -->
+  <div class="system-overview">
+    <div class="sys-metric">
+      <div class="sm-label">Active Dashboards</div>
+      <div class="sm-value" id="sm-active">—</div>
+      <div class="sm-sub"><span class="up" id="sm-active-sub">—</span></div>
+      <div class="sm-bar"><div class="sm-bar-fill" id="smb-active" style="background:var(--cyan);"></div></div>
+    </div>
+    <div class="sys-metric">
+      <div class="sm-label">Total Events Processed</div>
+      <div class="sm-value" id="sm-events">—</div>
+      <div class="sm-sub"><span class="up" id="sm-events-sub">—</span></div>
+      <div class="sm-bar"><div class="sm-bar-fill" id="smb-events" style="background:var(--green);"></div></div>
+    </div>
+    <div class="sys-metric">
+      <div class="sm-label">Normalization Rate</div>
+      <div class="sm-value" id="sm-rate">—</div>
+      <div class="sm-sub"><span id="sm-rate-sub">—</span></div>
+      <div class="sm-bar"><div class="sm-bar-fill" id="smb-rate" style="background:var(--green);"></div></div>
+    </div>
+    <div class="sys-metric">
+      <div class="sm-label">Total Errors</div>
+      <div class="sm-value" id="sm-errors">—</div>
+      <div class="sm-sub"><span class="down" id="sm-errors-sub">—</span></div>
+      <div class="sm-bar"><div class="sm-bar-fill" id="smb-errors" style="background:var(--red);"></div></div>
+    </div>
+    <div class="sys-metric">
+      <div class="sm-label">Files Ingested</div>
+      <div class="sm-value" id="sm-files">—</div>
+      <div class="sm-sub"><span id="sm-files-sub">—</span></div>
+      <div class="sm-bar"><div class="sm-bar-fill" id="smb-files" style="background:var(--amber);"></div></div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="control-grid">
+
+    <!-- DASHBOARDS AREA -->
+    <div class="dashboards-area">
+      <div class="da-header">
+        <span class="da-title">ALL DASHBOARDS</span>
+        <div style="display:flex;align-items:center;gap:0.8rem;">
+          <span id="running-badge" class="tag tag-green" style="display:none;"></span>
+          <div class="da-view-toggle">
+            <button class="view-btn active" onclick="setView('grid', this)">⊞ Grid</button>
+            <button class="view-btn" onclick="setView('list', this)">☰ List</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid View -->
+      <div class="cards-grid" id="cards-grid"></div>
+
+      <!-- List View -->
+      <div class="cards-list" id="cards-list">
+        <div class="list-header">
+          <span class="lh-col">Dashboard</span>
+          <span class="lh-col">Source</span>
+          <span class="lh-col">Events</span>
+          <span class="lh-col">Errors</span>
+          <span class="lh-col">Rate</span>
+          <span class="lh-col">Status</span>
+          <span class="lh-col">Actions</span>
+        </div>
+        <div id="list-rows"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: ACTIVITY + HEALTH -->
+    <div class="activity-panel">
+      <div class="ap-header">
+        <span class="ap-title">ACTIVITY LOG</span>
+        <button class="ap-clear" onclick="clearLog()">Clear</button>
+      </div>
+
+      <div class="activity-feed" id="activity-feed"></div>
+
+      <div class="health-panel">
+        <div class="hp-title">System Health</div>
+        <div class="health-row">
+          <span class="hr-label">CPU Usage</span>
+          <div class="hr-bar"><div class="hr-fill" id="h-cpu" style="background:var(--cyan);"></div></div>
+          <span class="hr-pct" id="hp-cpu">—</span>
+        </div>
+        <div class="health-row">
+          <span class="hr-label">Memory</span>
+          <div class="hr-bar"><div class="hr-fill" id="h-mem" style="background:var(--amber);"></div></div>
+          <span class="hr-pct" id="hp-mem">—</span>
+        </div>
+        <div class="health-row">
+          <span class="hr-label">PySpark Workers</span>
+          <div class="hr-bar"><div class="hr-fill" id="h-spark" style="background:var(--green);"></div></div>
+          <span class="hr-pct" id="hp-spark">—</span>
+        </div>
+        <div class="health-row">
+          <span class="hr-label">Disk I/O</span>
+          <div class="hr-bar"><div class="hr-fill" id="h-disk" style="background:var(--dim);"></div></div>
+          <span class="hr-pct" id="hp-disk">—</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .control-grid -->
+</div><!-- .control-page -->
+
+<script>
+// ── STATE ──
+const GROUP_COLORS = ['#00c8e0','#f5a623','#3dd68c','#e05252','#a78bfa','#fb7185'];
+const STATUSES = ['running','running','running','paused','stopped'];
+
+const DEFAULT_GROUPS = [
+  { id: 1, name: 'Production CloudTrail', source: 'aws_cloudtrail', color: '#00c8e0', files: ['prod_logs.json','prod_iam.json'] },
+  { id: 2, name: 'Staging Environment',   source: 'aws_cloudtrail', color: '#f5a623', files: ['staging_trail.json'] },
+  { id: 3, name: 'Security Audit',        source: 'aws_cloudtrail', color: '#3dd68c', files: ['audit_jan.json','audit_feb.json','audit_mar.json'] },
+];
+
+let groups = [];
+let dashboards = [];   // enriched with runtime state
+let activityLog = [];
+let startTime = Date.now();
+let currentView = 'grid';
+
+function rand(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+function pick(arr)  { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// ── INIT ──
+function init() {
+  try {
+    const stored = localStorage.getItem('ocsf_groups');
+    groups = stored ? JSON.parse(stored) : DEFAULT_GROUPS;
+    if (!groups || !groups.length) groups = DEFAULT_GROUPS;
+  } catch(e) { groups = DEFAULT_GROUPS; }
+
+  dashboards = groups.map((g, i) => ({
+    ...g,
+    status:   i < 2 ? 'running' : i === 2 ? 'paused' : 'stopped',
+    events:   rand(120, 4800),
+    errors:   rand(0, 24),
+    rate:     rand(88, 99),
+    spark:    Array.from({length: 16}, () => rand(5, 100)),
+    lastSeen: new Date(),
+  }));
+
+  pushLog('System initialised — control panel online', 'info');
+  dashboards.filter(d => d.status === 'running').forEach(d =>
+    pushLog(`Dashboard "${d.name}" is running`, 'success'));
+
+  renderAll();
+  updateSystemMetrics();
+  updateClock();
+  updateHealth();
+}
+
+// ── RENDER ALL ──
+function renderAll() {
+  renderCards();
+  renderListRows();
+  updateSystemMetrics();
+  updateRunningBadge();
+}
+
+// ── GRID CARDS ──
+function renderCards() {
+  document.getElementById('cards-grid').innerHTML = dashboards.map(d => {
+    const sparkPts = buildSparkPts(d.spark, 280, 32);
+    const statusColor = { running: 'var(--green)', paused: 'var(--amber)', stopped: 'var(--dim)', error: 'var(--red)' }[d.status];
+    return `
+    <div class="dash-card" id="card-${d.id}">
+      <div class="dc-statusbar" style="background:linear-gradient(90deg,${d.color},transparent);"></div>
+
+      <div class="dc-header">
+        <span class="dc-color-dot" style="background:${d.color};box-shadow:0 0 6px ${d.color}66;"></span>
+        <div class="dc-info">
+          <div class="dc-name">${d.name}</div>
+          <div class="dc-source">${d.source} · ${(d.files||[]).length} file${(d.files||[]).length!==1?'s':''}</div>
+        </div>
+        <span class="dc-status-badge status-${d.status}">${d.status}</span>
+      </div>
+
+      <div class="dc-metrics">
+        <div class="dc-metric">
+          <div class="dcm-val" style="color:${d.color};">${d.events.toLocaleString()}</div>
+          <div class="dcm-label">Events</div>
+        </div>
+        <div class="dc-metric">
+          <div class="dcm-val" style="color:${d.errors > 10 ? 'var(--red)' : 'var(--green)'};">${d.errors}</div>
+          <div class="dcm-label">Errors</div>
+        </div>
+        <div class="dc-metric">
+          <div class="dcm-val" style="color:${d.rate > 95 ? 'var(--green)' : 'var(--amber)'};">${d.rate}%</div>
+          <div class="dcm-label">Norm Rate</div>
+        </div>
+      </div>
+
+      <div class="dc-sparkline">
+        <svg viewBox="0 0 280 32" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sg-${d.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="${d.color}" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="${d.color}" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <polygon points="0,32 ${sparkPts} 280,32" fill="url(#sg-${d.id})"/>
+          <polyline points="${sparkPts}" fill="none" stroke="${d.color}" stroke-width="1.5" opacity="${d.status==='running'?'0.9':'0.3'}"/>
+          ${d.status === 'running' ? `<circle cx="${sparkPts.split(' ').pop().split(',')[0]}" cy="${sparkPts.split(' ').pop().split(',')[1]}" r="2.5" fill="${d.color}"/>` : ''}
+        </svg>
+      </div>
+
+      <div class="dc-files">
+        Files: ${(d.files||[]).map(f => `<span>${f}</span>`).join(', ')}
+      </div>
+
+      <div class="dc-actions">
+        ${d.status === 'running'  ? `<button class="dc-btn pause" onclick="pauseDash(${d.id})">⏸ Pause</button>` : ''}
+        ${d.status === 'paused'   ? `<button class="dc-btn resume" onclick="startDash(${d.id})">▶ Resume</button>` : ''}
+        ${d.status === 'stopped'  ? `<button class="dc-btn resume" onclick="startDash(${d.id})">▶ Start</button>` : ''}
+        ${d.status !== 'stopped'  ? `<button class="dc-btn stop"  onclick="stopDash(${d.id})">■ Stop</button>` : ''}
+        <a class="dc-btn" href="dashboard.html">View →</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function buildSparkPts(data, w, h) {
+  const max = Math.max(...data, 1);
+  return data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - (v / max) * (h - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+}
+
+// ── LIST VIEW ──
+function renderListRows() {
+  document.getElementById('list-rows').innerHTML = dashboards.map(d => `
+    <div class="list-row">
+      <div class="lr-name">
+        <span class="lr-dot" style="background:${d.color};box-shadow:0 0 4px ${d.color}55;"></span>
+        <span class="lr-name-text">${d.name}</span>
+      </div>
+      <span class="lr-source">${d.source}</span>
+      <span class="lr-num" style="color:${d.color};">${d.events.toLocaleString()}</span>
+      <span class="lr-num" style="color:${d.errors>10?'var(--red)':'var(--green)'};">${d.errors}</span>
+      <span class="lr-num" style="color:${d.rate>95?'var(--green)':'var(--amber)'};">${d.rate}%</span>
+      <span class="dc-status-badge status-${d.status}">${d.status}</span>
+      <div class="lr-actions">
+        ${d.status==='running' ? `<button class="lr-btn" onclick="pauseDash(${d.id})">Pause</button>` : `<button class="lr-btn" onclick="startDash(${d.id})">Start</button>`}
+        <button class="lr-btn" onclick="stopDash(${d.id})">Stop</button>
+        <a class="lr-btn" href="dashboard.html" style="text-decoration:none;text-align:center;">View</a>
+      </div>
+    </div>`).join('');
+}
+
+// ── SYSTEM METRICS ──
+function updateSystemMetrics() {
+  const running = dashboards.filter(d => d.status === 'running').length;
+  const total   = dashboards.length;
+  const events  = dashboards.reduce((s, d) => s + d.events, 0);
+  const errors  = dashboards.reduce((s, d) => s + d.errors, 0);
+  const rate    = dashboards.length ? Math.round(dashboards.reduce((s,d) => s + d.rate, 0) / dashboards.length) : 0;
+  const files   = dashboards.reduce((s, d) => s + (d.files||[]).length, 0);
+
+  animNum('sm-active', running);
+  animNum('sm-events', events);
+  document.getElementById('sm-rate').textContent   = rate + '%';
+  animNum('sm-errors', errors);
+  animNum('sm-files',  files);
+
+  document.getElementById('sm-active-sub').textContent  = `${total} total groups`;
+  document.getElementById('sm-events-sub').textContent  = `↑ ${rand(2,12)}% this session`;
+  document.getElementById('sm-rate-sub').className      = rate > 95 ? 'up' : 'warn';
+  document.getElementById('sm-rate-sub').textContent    = rate > 95 ? 'Excellent' : 'Below target';
+  document.getElementById('sm-errors-sub').textContent  = `${errors > 20 ? '↑ High' : '↓ Low'} error rate`;
+  document.getElementById('sm-files-sub').textContent   = `across ${total} groups`;
+
+  // bar widths
+  setBar('smb-active', running / Math.max(total, 1) * 100);
+  setBar('smb-events', Math.min(events / 5000 * 100, 100));
+  setBar('smb-rate',   rate);
+  setBar('smb-errors', Math.min(errors / 50 * 100, 100));
+  setBar('smb-files',  Math.min(files / 10 * 100, 100));
+
+  // nav count
+  document.getElementById('nav-running-count').textContent = running;
+  updateRunningBadge();
+}
+
+function setBar(id, pct) {
+  const el = document.getElementById(id);
+  if (el) el.style.width = Math.round(pct) + '%';
+}
+
+function animNum(id, target) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const start = parseInt(el.textContent.replace(/,/g,'')) || 0;
+  const dur = 600; const t0 = performance.now();
+  function step(now) {
+    const p = Math.min((now - t0) / dur, 1);
+    const v = Math.floor(start + (target - start) * p);
+    el.textContent = v.toLocaleString();
+    if (p < 1) requestAnimationFrame(step);
+    else el.textContent = target.toLocaleString();
+  }
+  requestAnimationFrame(step);
+}
+
+function updateRunningBadge() {
+  const running = dashboards.filter(d => d.status === 'running').length;
+  const badge = document.getElementById('running-badge');
+  if (running > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = `${running} running`;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── DASH CONTROLS ──
+function startDash(id) {
+  const d = dashboards.find(d => d.id === id);
+  if (!d) return;
+  d.status = 'running';
+  pushLog(`"${d.name}" started`, 'success');
+  renderAll();
+}
+function pauseDash(id) {
+  const d = dashboards.find(d => d.id === id);
+  if (!d) return;
+  d.status = 'paused';
+  pushLog(`"${d.name}" paused`, 'warn');
+  renderAll();
+}
+function stopDash(id) {
+  const d = dashboards.find(d => d.id === id);
+  if (!d) return;
+  d.status = 'stopped';
+  pushLog(`"${d.name}" stopped`, 'warn');
+  renderAll();
+}
+function startAll() {
+  dashboards.forEach(d => d.status = 'running');
+  pushLog('All dashboards started', 'success');
+  renderAll();
+}
+function pauseAll() {
+  dashboards.filter(d => d.status === 'running').forEach(d => d.status = 'paused');
+  pushLog('All dashboards paused', 'warn');
+  renderAll();
+}
+function stopAll() {
+  dashboards.forEach(d => d.status = 'stopped');
+  pushLog('All dashboards stopped', 'warn');
+  renderAll();
+}
+function refreshAll() {
+  dashboards.forEach(d => {
+    if (d.status === 'running') {
+      d.events += rand(5, 40);
+      d.spark.push(rand(5,100));
+      d.spark.shift();
+    }
+  });
+  pushLog('All dashboards refreshed', 'info');
+  renderAll();
+}
+function exportReport() {
+  const report = dashboards.map(d =>
+    `${d.name} | ${d.status} | Events: ${d.events} | Errors: ${d.errors} | Rate: ${d.rate}%`
+  ).join('\n');
+  const blob = new Blob([`OCSF Log Mapper — Control Report\n${new Date().toISOString()}\n\n${report}`], { type: 'text/plain' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'ocsf_control_report.txt'; a.click();
+  pushLog('Report exported', 'info');
+}
+
+// ── VIEW TOGGLE ──
+function setView(v, btn) {
+  currentView = v;
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cards-grid').style.display = v === 'grid' ? 'grid' : 'none';
+  document.getElementById('cards-list').style.display = v === 'list' ? 'block' : 'none';
+}
+
+// ── ACTIVITY LOG ──
+function pushLog(msg, type = 'info') {
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  activityLog.unshift({ msg, type, time });
+  if (activityLog.length > 80) activityLog.pop();
+  renderLog();
+}
+
+function renderLog() {
+  document.getElementById('activity-feed').innerHTML = activityLog.map(e => `
+    <div class="activity-entry">
+      <div class="ae-time">${e.time}</div>
+      <div class="ae-msg">
+        ${e.msg}
+        <span class="ae-tag ae-${e.type}">${e.type}</span>
+      </div>
+    </div>`).join('');
+}
+
+function clearLog() {
+  activityLog = [];
+  renderLog();
+}
+
+// ── HEALTH BARS ──
+function updateHealth() {
+  const cpu   = rand(18, 72);
+  const mem   = rand(30, 65);
+  const spark = rand(60, 95);
+  const disk  = rand(10, 45);
+
+  document.getElementById('h-cpu').style.width   = cpu   + '%';
+  document.getElementById('h-mem').style.width   = mem   + '%';
+  document.getElementById('h-spark').style.width = spark + '%';
+  document.getElementById('h-disk').style.width  = disk  + '%';
+  document.getElementById('hp-cpu').textContent   = cpu   + '%';
+  document.getElementById('hp-mem').textContent   = mem   + '%';
+  document.getElementById('hp-spark').textContent = spark + '%';
+  document.getElementById('hp-disk').textContent  = disk  + '%';
+}
+
+// ── CLOCK & UPTIME ──
+function updateClock() {
+  const tick = () => {
+    const now = new Date();
+    document.getElementById('cb-time').textContent =
+      now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
+      ' · ' + now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    const up = Math.floor((Date.now() - startTime) / 1000);
+    const h  = String(Math.floor(up / 3600)).padStart(2, '0');
+    const m  = String(Math.floor((up % 3600) / 60)).padStart(2, '0');
+    const s  = String(up % 60).padStart(2, '0');
+    document.getElementById('cb-uptime').textContent = `Uptime: ${h}:${m}:${s}`;
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ── AUTO TICK: simulate live event ingestion ──
+setInterval(() => {
+  const running = dashboards.filter(d => d.status === 'running');
+  running.forEach(d => {
+    const inc = rand(1, 12);
+    d.events += inc;
+    d.spark.push(rand(5, 100));
+    d.spark.shift();
+    // occasional log entry
+    if (Math.random() < 0.25) {
+      const msgs = [
+        `"${d.name}" ingested ${inc} new events`,
+        `"${d.name}" normalized batch — rate ${d.rate}%`,
+        `New source IP detected in "${d.name}"`,
+      ];
+      pushLog(pick(msgs), 'info');
+    }
+  });
+  if (running.length) {
+    renderCards();
+    renderListRows();
+    updateSystemMetrics();
+    updateHealth();
+  }
+}, 6000);
+
+init();
+</script>
+</body>
+</html>
